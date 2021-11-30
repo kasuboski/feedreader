@@ -1,55 +1,72 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css">
-    <title>Hello, world!</title>
-  </head>
-  <body>
-    <header class="container">
-        <nav>
-            <ul>
-              <li><strong>Brand</strong></li>
-            </ul>
-            <ul>
-              <li><a href="#">Link</a></li>
-              <li><a href="#">Link</a></li>
-              <li><a href="#">Link</a></li>
-            </ul>
-          </nav>
-    </header>
-    <main class="container">
-      <section>
-          <h2>Unread</h2>
-          <article>
-              <hgroup>
-                <h3>title</h3>
-                <p>Cool Blog | recently | 1min read</p>
-              </hgroup>
-          </article>
-          <article>
-            <hgroup>
-              <h3>title</h3>
-              <p>Cool Blog | recently | 1min read</p>
-            </hgroup>
-        </article>
-        <article>
-            <hgroup>
-              <h3>title</h3>
-              <p>Cool Blog | recently | 1min read</p>
-            </hgroup>
-            <div style="display: flex">
-                <a style="padding-inline-end: 10px;">Read</a>
-                <a style="padding-inline-end: 10px;">Star</a>
-                <a style="padding-inline-end: 10px;">Comments</a>
-            </div>
-        </article>
-        <div class="grid">
-            <a style="text-align: center" href="#">Previous</a>
-            <a style="text-align: center" href="#">Next</a>
-        </div>
-      </section>
-    </main>
-  </body>
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <link rel="stylesheet" href="https://unpkg.com/turretcss/dist/turretcss.min.css" crossorigin="anonymous">
+  <title>Hello, world!</title>
+</head>
+
+<body>
+  <header class="container max-width-l flex align-items-center padding-vertical-xs">
+    <h1 class="no-margin-bottom"><small>Feedreader</small></h1>
+    <nav class="nav-inline">
+      <ul>
+        <li><a href="#">Unread</a></li>
+        <li><a href="#">Starred</a></li>
+        <li><a href="#">History</a></li>
+        <li><a href="#">Feeds</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main class="container max-width-l margin-bottom-l">
+    <section>
+      <h2>Unread</h2>
+      <article class="border padding-xs margin-bottom-s">
+        <header><hgroup>
+          <h3 class="no-margin-bottom">title</h3>
+          <p class="no-margin-top">Cool Blog | recently | 1min read</p>
+        </hgroup></header>
+        <p class="flex">
+          <a class="padding-right-xs" href="#">Read</a>
+          <a class="padding-right-xs" href="#">Star</a>
+          <a class="padding-right-xs" href="#">Comments</a>
+        </p>
+      </article>
+      <article class="border padding-xs margin-bottom-s">
+        <header><hgroup>
+          <h3 class="no-margin-bottom">title</h3>
+          <p class="no-margin-top">Cool Blog | recently | 1min read</p>
+        </hgroup></header>
+        <p class="flex">
+          <a class="padding-right-xs" href="#">Read</a>
+          <a class="padding-right-xs" href="#">Star</a>
+          <a class="padding-right-xs" href="#">Comments</a>
+        </p>
+      </article>
+      <article class="border padding-xs margin-bottom-s">
+        <header><hgroup>
+          <h3 class="no-margin-bottom">title</h3>
+          <p class="no-margin-top">Cool Blog | recently | 1min read</p>
+        </hgroup></header>
+        <p class="flex">
+          <a class="padding-right-xs" href="#">Read</a>
+          <a class="padding-right-xs" href="#">Star</a>
+          <a class="padding-right-xs" href="#">Comments</a>
+        </p>
+      </article>
+      <div class="flex-justify-center">
+        <a href="#">Previous</a>
+        <a href="#">Next</a>
+      </div>
+    </section>
+  </main>
+  <footer class="container max-width-l">
+    A Simple Feedreader
+  </footer>
+</body>
+
 </html>
