@@ -1,10 +1,39 @@
 use std::env;
 use rweb::*;
 use serde::{Serialize, Deserialize};
+use url::{Url};
+use chrono::{DateTime, Utc};
 
 #[derive(Schema, Deserialize, Serialize)]
 struct Healthz {
     up: bool,
+}
+
+#[derive(Schema, Deserialize, Serialize)]
+struct Dump {
+    feeds: Vec<Feed>,
+    posts: Vec<Post>,
+}
+
+#[derive(Schema, Deserialize, Serialize)]
+struct Feed {
+    name: String,
+    url: Url,
+    favicon: Url,
+    last_fetched: DateTime<Utc>,
+    fetch_error: Option<String>,
+    category: String,
+}
+
+#[derive(Schema, Deserialize, Serialize)]
+struct Post {
+    title: String,
+    content_link: Url,
+    comments_link: Url,
+    robust_link: Url,
+    read: bool,
+    starred: bool,
+    feed: String,
 }
 
 #[tokio::main]
@@ -35,6 +64,7 @@ async fn main() {
 
     let routes = index
         .or(healthz())
+        .or(dump())
         .with(log)
         .with(cors);
 
@@ -45,5 +75,32 @@ async fn main() {
 fn healthz() -> Json<Healthz> {
     Healthz {
         up: true
+    }.into()
+}
+
+#[get("/dump")]
+fn dump() -> Json<Dump> {
+    let posts = vec![Post {
+        title: "I'm cool".to_string(),
+        content_link: Url::parse("https://hackernews.com/post/cool").unwrap(),
+        comments_link: Url::parse("https://hackernews.com/post/cool/comments").unwrap(),
+        robust_link: Url::parse("https://archive.li/xwe8s").unwrap(),
+        read: false,
+        starred: false,
+        feed: "HackerNews".to_string(),
+    }];
+
+    let feeds = vec![Feed {
+        name: "HackerNews".to_string(),
+        url: Url::parse("https://hackernews.com").unwrap(),
+        favicon: Url::parse("https://hackernews.com/favicon").unwrap(),
+        last_fetched: Utc::now(),
+        fetch_error: None,
+        category: "tech".to_string(),
+    }];
+
+    Dump {
+        feeds,
+        posts,
     }.into()
 }
