@@ -1,11 +1,14 @@
 use std::env;
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use futures::lock::Mutex;
 use rweb::*;
 use askama_warp::Template;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 use feed_rs::parser;
+use tokio::{task, time};
 
 #[derive(Schema, Deserialize, Serialize)]
 struct Healthz {
@@ -15,7 +18,31 @@ struct Healthz {
 #[derive(Clone, Default)]
 struct DB {
     feeds: Arc<Mutex<Vec<Feed>>>,
-    entries: Arc<Mutex<Vec<Entry>>>,
+    entries: Arc<Mutex<HashMap<String, Entry>>>,
+}
+
+impl DB {
+    async fn add_feeds<T>(&self, feeds: T) 
+    where T: Iterator<Item = Feed> {
+        self.feeds.lock().await.extend(feeds);
+    }
+
+    async fn get_feeds(&self) -> Vec<Feed>{
+        self.feeds.lock().await.to_vec()
+    }
+
+    async fn add_entries<T>(&self, entries: T)
+    where T: Iterator<Item = Entry> {
+        let mut out = self.entries.lock().await;
+        for e in entries.into_iter() {
+            let stored_e = e.clone();
+            out.entry(e.id).or_insert(stored_e);
+        }
+    }
+
+    async fn get_entries(&self) -> Vec<Entry> {
+        self.entries.lock().await.values().cloned().collect()
+    }
 }
 
 #[derive(Schema, Deserialize, Serialize)]
@@ -24,7 +51,7 @@ struct Dump {
     entries: Vec<Entry>,
 }
 
-#[derive(Clone, Schema, Deserialize, Serialize)]
+#[derive(Debug, Clone, Schema, Deserialize, Serialize)]
 struct Feed {
     name: String,
     site_url: String,
@@ -35,8 +62,9 @@ struct Feed {
     category: String,
 }
 
-#[derive(Default, Clone, Schema, Deserialize, Serialize)]
+#[derive(Default, Debug, Clone, Schema, Deserialize, Serialize)]
 struct Entry {
+    id: String,
     title: String,
     content_link: String,
     comments_link: Option<String>,
@@ -46,11 +74,23 @@ struct Entry {
     feed: String,
 }
 
-impl From<feed_rs::model::Entry> for Entry {
-    fn from(e: feed_rs::model::Entry) -> Self {
-        let content_link = e.links.into_iter().nth(0).map(|l| l.href.to_string()).unwrap_or("".to_string()).clone();
+impl From<&feed_rs::model::Entry> for Entry {
+    fn from(e: &feed_rs::model::Entry) -> Self {
+        let content_link = e.links
+            .iter()
+            .take(1)
+            .map(|l| l.href.to_string())
+            .nth(0)
+            .unwrap_or("".to_string());
+
+        let title = match &e.title {
+            Some(t) => &t.content,
+            None => "",
+        };
+
         Entry {
-            title: default_text(e.title),
+            id: e.id.clone(),
+            title: title.to_string(),
             content_link: content_link,
             comments_link: None,
             read: false,
@@ -99,32 +139,49 @@ async fn main() {
         category: "tech".to_string(),
     }];
 
-    let hn = &feeds[0];
-    let hn_resp = reqwest::get(hn.feed_url.to_string())
-        .await
-        .expect("couldn't get feed")
-        .bytes()
-        .await
-        .expect("couldn't pull bytes");
-
-    let hn_feed = match parser::parse_with_uri(hn_resp.as_ref(), Some(&hn.feed_url.to_string())) {
-        Ok(feed) => feed,
-        Err(_error) => panic!(),
-    };
-
-    let entries: Vec<Entry> = hn_feed.entries.into_iter()
-        .map(|e| {
-            let mut o: Entry = e.into();
-            o.feed = hn.site_url.to_string();
-            o
-        })
-        .collect();
-
     let db: DB = Default::default();
-    {
-        db.entries.lock().await.extend(entries);
-        db.feeds.lock().await.extend(feeds);
-    }
+    db.add_feeds(feeds.into_iter()).await;
+
+    let update_db = db.clone();
+    let updater = task::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(180));
+        let client = reqwest::Client::new();
+
+        loop {
+            interval.tick().await;
+
+            let feeds = update_db.feeds.lock().await;
+
+            let mut updated = 0;
+            for f in feeds.iter() {
+                let feed_resp = client.get(&f.feed_url)
+                    .send()
+                    .await
+                    .unwrap();
+                
+                if feed_resp.status() != reqwest::StatusCode::OK {
+                    continue;
+                }
+
+                let body = feed_resp.bytes().await.unwrap();
+                
+                let feed = parser::parse_with_uri(body.as_ref(), Some(&f.feed_url)).unwrap();
+                let entries: Vec<Entry> = feed.entries
+                    .iter()
+                    .map(|e| {
+                        let mut o: Entry = e.into();
+                        o.feed = f.site_url.clone();
+                        o
+                    })
+                    .collect();
+
+                updated += entries.len();
+                update_db.add_entries(entries.into_iter()).await;
+            }
+
+            println!("found {} entries", updated)
+        }
+    });
 
     let routes = index(db.clone())
         .or(healthz())
@@ -133,11 +190,12 @@ async fn main() {
         .with(cors);
 
     warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
+    updater.await.expect("updater failed");
 }
 
 #[get("/")]
 async fn index(#[data] db: DB) -> Result<IndexTemplate<'static>, Rejection> {
-    let entries = db.entries.lock().await.to_vec();
+    let entries = db.get_entries().await;
     Ok(IndexTemplate {
         title: "feedreader",
         entries: entries,
@@ -153,15 +211,11 @@ fn healthz() -> Json<Healthz> {
 
 #[get("/dump")]
 async fn dump(#[data] db: DB) -> Result<Json<Dump>, Rejection> {
-    let feeds = db.feeds.lock().await.to_vec();
-    let entries = db.entries.lock().await.to_vec();
+    let feeds = db.get_feeds().await;
+    let entries = db.get_entries().await;
 
     Ok(Dump {
         feeds,
         entries,
     }.into())
-}
-
-fn default_text(text: Option<feed_rs::model::Text>) -> String {
-    text.and_then(|t| Some(t.content)).unwrap_or("".to_string())
 }
