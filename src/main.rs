@@ -1,6 +1,5 @@
 use std::env;
 use std::time::Duration;
-use std::fmt::Display;
 
 use rweb::*;
 use askama_warp::Template;
@@ -38,38 +37,10 @@ struct Entry {
     content_link: String,
     comments_link: Option<String>,
     robust_link: String,
-    published: DisplayTime,
+    published: Option<DateTime<Utc>>,
     read: bool,
     starred: bool,
     feed: String,
-}
-
-#[derive(Debug, Clone, Default, Schema, Deserialize, Serialize)]
-pub struct DisplayTime(Option<DateTime<Utc>>);
-
-trait DisplayableTime {
-    fn display(self) -> DisplayTime;
-}
-
-impl DisplayableTime for Option<DateTime<Utc>> {
-    fn display(self) -> DisplayTime {
-        DisplayTime(self)
-    }
-}
-
-impl Display for DisplayTime{
-    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self.0 {
-            Some(ref t) => write!(formatter, "{}", t.to_rfc3339()),
-            None => write!(formatter, "null"),
-        }
-    }
-}
-
-impl From<Option<DateTime<Utc>>> for DisplayTime {
-    fn from(o: Option<DateTime<Utc>>) -> Self {
-        DisplayTime(o)
-    }
 }
 
 impl From<&feed_rs::model::Entry> for Entry {
@@ -91,7 +62,7 @@ impl From<&feed_rs::model::Entry> for Entry {
             title: title.to_string(),
             content_link: content_link,
             comments_link: None,
-            published: e.published.into(),
+            published: e.published,
             read: false,
             starred: false,
             ..Default::default()
@@ -107,12 +78,12 @@ struct IndexTemplate<'a> {
 }
 
 mod filters {
+    use chrono::{DateTime, Utc};
     use chrono_humanize::HumanTime;
     use std::fmt;
-    use super::DisplayTime;
 
-    pub fn humandate(s: &DisplayTime) -> ::askama::Result<String> {
-        let date = s.0.ok_or(fmt::Error)?;
+    pub fn humandate(s: &Option<DateTime<Utc>>) -> ::askama::Result<String> {
+        let date = s.ok_or(fmt::Error)?;
         Ok(format!("{}", HumanTime::from(date)))
 
     }
@@ -290,7 +261,7 @@ mod db {
                 .cloned()
                 .collect::<Vec<Entry>>();
 
-            e.sort_by(|a, b| b.published.0.cmp(&a.published.0));
+            e.sort_by(|a, b| b.published.cmp(&a.published));
             e
         }
     }
