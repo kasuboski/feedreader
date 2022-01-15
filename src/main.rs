@@ -1,8 +1,7 @@
 use std::env;
-use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
-use futures::lock::Mutex;
+use std::fmt::Display;
+
 use rweb::*;
 use askama_warp::Template;
 use serde::{Serialize, Deserialize};
@@ -13,36 +12,6 @@ use tokio::{task, time};
 #[derive(Schema, Deserialize, Serialize)]
 struct Healthz {
     up: bool,
-}
-
-#[derive(Clone, Default)]
-struct DB {
-    feeds: Arc<Mutex<Vec<Feed>>>,
-    entries: Arc<Mutex<HashMap<String, Entry>>>,
-}
-
-impl DB {
-    async fn add_feeds<T>(&self, feeds: T) 
-    where T: Iterator<Item = Feed> {
-        self.feeds.lock().await.extend(feeds);
-    }
-
-    async fn get_feeds(&self) -> Vec<Feed>{
-        self.feeds.lock().await.to_vec()
-    }
-
-    async fn add_entries<T>(&self, entries: T)
-    where T: Iterator<Item = Entry> {
-        let mut out = self.entries.lock().await;
-        for e in entries.into_iter() {
-            let stored_e = e.clone();
-            out.entry(e.id).or_insert(stored_e);
-        }
-    }
-
-    async fn get_entries(&self) -> Vec<Entry> {
-        self.entries.lock().await.values().cloned().collect()
-    }
 }
 
 #[derive(Schema, Deserialize, Serialize)]
@@ -69,9 +38,38 @@ struct Entry {
     content_link: String,
     comments_link: Option<String>,
     robust_link: String,
+    published: DisplayTime,
     read: bool,
     starred: bool,
     feed: String,
+}
+
+#[derive(Debug, Clone, Default, Schema, Deserialize, Serialize)]
+pub struct DisplayTime(Option<DateTime<Utc>>);
+
+trait DisplayableTime {
+    fn display(self) -> DisplayTime;
+}
+
+impl DisplayableTime for Option<DateTime<Utc>> {
+    fn display(self) -> DisplayTime {
+        DisplayTime(self)
+    }
+}
+
+impl Display for DisplayTime{
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.0 {
+            Some(ref t) => write!(formatter, "{}", t.to_rfc3339()),
+            None => write!(formatter, "null"),
+        }
+    }
+}
+
+impl From<Option<DateTime<Utc>>> for DisplayTime {
+    fn from(o: Option<DateTime<Utc>>) -> Self {
+        DisplayTime(o)
+    }
 }
 
 impl From<&feed_rs::model::Entry> for Entry {
@@ -93,6 +91,7 @@ impl From<&feed_rs::model::Entry> for Entry {
             title: title.to_string(),
             content_link: content_link,
             comments_link: None,
+            published: e.published.into(),
             read: false,
             starred: false,
             ..Default::default()
@@ -105,6 +104,18 @@ impl From<&feed_rs::model::Entry> for Entry {
 struct IndexTemplate<'a> {
     title: &'a str,
     entries: Vec<Entry>,
+}
+
+mod filters {
+    use chrono_humanize::HumanTime;
+    use std::fmt;
+    use super::DisplayTime;
+
+    pub fn humandate(s: &DisplayTime) -> ::askama::Result<String> {
+        let date = s.0.ok_or(fmt::Error)?;
+        Ok(format!("{}", HumanTime::from(date)))
+
+    }
 }
 
 #[tokio::main]
@@ -139,18 +150,19 @@ async fn main() {
         category: "tech".to_string(),
     }];
 
-    let db: DB = Default::default();
+    let db: db::DB = Default::default();
     db.add_feeds(feeds.into_iter()).await;
 
     let update_db = db.clone();
     let updater = task::spawn(async move {
-        let mut interval = time::interval(Duration::from_secs(180));
+        let time_interval = 30;
+        let mut interval = time::interval(Duration::from_secs(time_interval));
         let client = reqwest::Client::new();
 
         loop {
             interval.tick().await;
 
-            let feeds = update_db.feeds.lock().await;
+            let feeds = update_db.get_feeds().await;
 
             let mut updated = 0;
             for f in feeds.iter() {
@@ -160,8 +172,11 @@ async fn main() {
                     .unwrap();
                 
                 if feed_resp.status() != reqwest::StatusCode::OK {
+                    let _ = update_db.update_feed_status(f.feed_url.clone(), Some("response code not ok".to_string())).await;
                     continue;
                 }
+                // we don't actually care if this works
+                let _ = update_db.update_feed_status(f.feed_url.clone(), None).await;
 
                 let body = feed_resp.bytes().await.unwrap();
                 
@@ -170,7 +185,7 @@ async fn main() {
                     .iter()
                     .map(|e| {
                         let mut o: Entry = e.into();
-                        o.feed = f.site_url.clone();
+                        o.feed = f.name.clone();
                         o
                     })
                     .collect();
@@ -178,7 +193,6 @@ async fn main() {
                 updated += entries.len();
                 update_db.add_entries(entries.into_iter()).await;
             }
-
             println!("found {} entries", updated)
         }
     });
@@ -194,7 +208,7 @@ async fn main() {
 }
 
 #[get("/")]
-async fn index(#[data] db: DB) -> Result<IndexTemplate<'static>, Rejection> {
+async fn index(#[data] db: db::DB) -> Result<IndexTemplate<'static>, Rejection> {
     let entries = db.get_entries().await;
     Ok(IndexTemplate {
         title: "feedreader",
@@ -210,7 +224,7 @@ fn healthz() -> Json<Healthz> {
 }
 
 #[get("/dump")]
-async fn dump(#[data] db: DB) -> Result<Json<Dump>, Rejection> {
+async fn dump(#[data] db: db::DB) -> Result<Json<Dump>, Rejection> {
     let feeds = db.get_feeds().await;
     let entries = db.get_entries().await;
 
@@ -218,4 +232,66 @@ async fn dump(#[data] db: DB) -> Result<Json<Dump>, Rejection> {
         feeds,
         entries,
     }.into())
+}
+
+mod db {
+    use futures::lock::Mutex;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use chrono::{Utc};
+
+    use super::{Feed, Entry};
+
+    #[derive(Clone, Default)]
+    pub struct DB {
+        feeds: Arc<Mutex<Vec<Feed>>>,
+        entries: Arc<Mutex<HashMap<String, Entry>>>,
+    }
+
+    impl DB {
+        pub(crate) async fn add_feeds<T>(&self, feeds: T) 
+        where T: Iterator<Item = Feed> {
+            self.feeds.lock().await.extend(feeds);
+        }
+
+        pub(crate) async fn get_feeds(&self) -> Vec<Feed>{
+            self.feeds.lock().await.to_vec()
+        }
+
+        pub(crate) async fn update_feed_status(&self, feed_url: String, error: Option<String>) -> Result<(), &str> {
+            let mut feeds = self.feeds.lock().await;
+            let pos = feeds
+                .iter()
+                .position(|f| f.feed_url == feed_url);
+            
+            match pos {
+                Some(p) => {
+                    let f = &mut feeds[p];
+                    f.last_fetched = Utc::now();
+                    f.fetch_error = error;
+                    Ok(())
+                },
+                None => Err("not found")
+            }
+        }
+
+        pub(crate) async fn add_entries<T>(&self, entries: T)
+        where T: Iterator<Item = Entry> {
+            let mut out = self.entries.lock().await;
+            for e in entries.into_iter() {
+                let stored_e = e.clone();
+                out.entry(e.id).or_insert(stored_e);
+            }
+        }
+
+        pub(crate) async fn get_entries(&self) -> Vec<Entry> {
+            let mut e = self.entries.lock().await
+                .values()
+                .cloned()
+                .collect::<Vec<Entry>>();
+
+            e.sort_by(|a, b| b.published.0.cmp(&a.published.0));
+            e
+        }
+    }
 }

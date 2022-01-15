@@ -28,8 +28,8 @@
       {% for entry in entries %}
       <article class="border padding-xs margin-bottom-s">
         <header><hgroup>
-          <h3 class="no-margin-bottom">{{ entry.title }}</h3>
-          <p class="no-margin-top">{{ entry.feed }} | recently</p>
+          <h3 class="no-margin-bottom"><a href="{{ entry.content_link }}">{{ entry.title }}</a></h3>
+          <p class="no-margin-top">{{ entry.feed }} | {{ entry.published |humandate }}</p>
         </hgroup></header>
         <p class="flex">
           <a class="padding-right-xs" href="#">Read</a>
