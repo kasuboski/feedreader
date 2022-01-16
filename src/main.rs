@@ -8,6 +8,9 @@ use chrono::{DateTime, Utc};
 use feed_rs::parser;
 use tokio::{task, time};
 
+use regex::Regex;
+use lazy_static::lazy_static;
+
 #[derive(Schema, Deserialize, Serialize)]
 struct Healthz {
     up: bool,
@@ -25,7 +28,7 @@ struct Feed {
     site_url: String,
     feed_url: String,
     favicon: String,
-    last_fetched: DateTime<Utc>,
+    last_fetched: Option<DateTime<Utc>>,
     fetch_error: Option<String>,
     category: String,
 }
@@ -35,7 +38,7 @@ struct Entry {
     id: String,
     title: String,
     content_link: String,
-    comments_link: Option<String>,
+    comments_link: String,
     robust_link: String,
     published: Option<DateTime<Utc>>,
     read: bool,
@@ -57,11 +60,31 @@ impl From<&feed_rs::model::Entry> for Entry {
             None => "",
         };
 
+        lazy_static! {
+            static ref LINK: Regex = Regex::new(r#"href="(?P<url>.*)""#).unwrap();
+        }
+
+        let summary = match &e.summary {
+            Some(s) => &s.content,
+            None => "",
+        };
+
+        let caps = LINK.captures(summary);
+        let url_match = match caps {
+            Some(c) => c.name("url"),
+            None => None,
+        };
+
+        let comments_link = match url_match {
+            Some(u) => u.as_str().to_string(),
+            None => "".to_string(),
+        };
+
         Entry {
             id: e.id.clone(),
             title: title.to_string(),
             content_link: content_link,
-            comments_link: None,
+            comments_link: comments_link,
             published: e.published,
             read: false,
             starred: false,
@@ -72,9 +95,20 @@ impl From<&feed_rs::model::Entry> for Entry {
 
 #[derive(Template)]
 #[template(path = "index.html")]
-struct IndexTemplate<'a> {
-    title: &'a str,
+struct IndexTemplate {
     entries: Vec<Entry>,
+}
+
+#[derive(Template)]
+#[template(path = "feeds.html")]
+struct FeedsTemplate {
+    feeds: Vec<Feed>,
+}
+
+#[derive(Template)]
+#[template(path = "starred.html")]
+struct StarredTemplate {
+    starred: Vec<Entry>,
 }
 
 mod filters {
@@ -116,7 +150,7 @@ async fn main() {
         site_url: "https://news.ycombinator.com".to_string(),
         feed_url: "https://news.ycombinator.com/rss".to_string(),
         favicon: "https://hackernews.com/favicon".to_string(),
-        last_fetched: Utc::now(),
+        last_fetched: Some(Utc::now()),
         fetch_error: None,
         category: "tech".to_string(),
     }];
@@ -169,6 +203,8 @@ async fn main() {
     });
 
     let routes = index(db.clone())
+        .or(get_feeds(db.clone()))
+        .or(get_starred(db.clone()))
         .or(healthz())
         .or(dump(db.clone()))
         .with(log)
@@ -179,11 +215,26 @@ async fn main() {
 }
 
 #[get("/")]
-async fn index(#[data] db: db::DB) -> Result<IndexTemplate<'static>, Rejection> {
-    let entries = db.get_entries().await;
+async fn index(#[data] db: db::DB) -> Result<IndexTemplate, Rejection> {
+    let entries = db.get_unread_entries().await;
     Ok(IndexTemplate {
-        title: "feedreader",
-        entries: entries,
+        entries,
+    })
+}
+
+#[get("/feeds.html")]
+async fn get_feeds(#[data] db: db::DB) -> Result<FeedsTemplate, Rejection> {
+    let feeds = db.get_feeds().await;
+    Ok(FeedsTemplate {
+        feeds,
+    })
+}
+
+#[get("/starred.html")]
+async fn get_starred(#[data] db: db::DB) -> Result<StarredTemplate, Rejection> {
+    let starred = db.get_starred_entries().await;
+    Ok(StarredTemplate {
+        starred,
     })
 }
 
@@ -238,7 +289,7 @@ mod db {
             match pos {
                 Some(p) => {
                     let f = &mut feeds[p];
-                    f.last_fetched = Utc::now();
+                    f.last_fetched = Some(Utc::now());
                     f.fetch_error = error;
                     Ok(())
                 },
@@ -263,6 +314,20 @@ mod db {
 
             e.sort_by(|a, b| b.published.cmp(&a.published));
             e
+        }
+
+        pub(crate) async fn get_starred_entries(&self) -> Vec<Entry> {
+            self.get_entries().await
+                .into_iter()
+                .filter(|e| e.starred)
+                .collect()
+        }
+
+        pub(crate) async fn get_unread_entries(&self) -> Vec<Entry> {
+            self.get_entries().await
+                .into_iter()
+                .filter(|e| !e.read)
+                .collect()
         }
     }
 }
