@@ -100,6 +100,12 @@ struct IndexTemplate {
 }
 
 #[derive(Template)]
+#[template(path = "entry_list.html")]
+struct EntryListTemplate {
+    entries: Vec<Entry>,
+}
+
+#[derive(Template)]
 #[template(path = "feeds.html")]
 struct FeedsTemplate {
     feeds: Vec<Feed>,
@@ -205,6 +211,7 @@ async fn main() {
     let routes = index(db.clone())
         .or(get_feeds(db.clone()))
         .or(get_starred(db.clone()))
+        .or(mark_entry_read(db.clone()))
         .or(healthz())
         .or(dump(db.clone()))
         .with(log)
@@ -238,6 +245,14 @@ async fn get_starred(#[data] db: db::DB) -> Result<StarredTemplate, Rejection> {
     })
 }
 
+#[post("/read/{entry_id}")]
+async fn mark_entry_read(entry_id: String, #[data] db: db::DB, ) -> Result<EntryListTemplate, Rejection> {
+    let entries = db.mark_entry_read(entry_id).await.or(Err(warp::reject::not_found()))?;
+    Ok(EntryListTemplate {
+        entries,
+    })
+}
+
 #[get("/healthz")]
 fn healthz() -> Json<Healthz> {
     Healthz {
@@ -248,7 +263,7 @@ fn healthz() -> Json<Healthz> {
 #[get("/dump")]
 async fn dump(#[data] db: db::DB) -> Result<Json<Dump>, Rejection> {
     let feeds = db.get_feeds().await;
-    let entries = db.get_entries().await;
+    let entries = db.get_entries(|_| true).await;
 
     Ok(Dump {
         feeds,
@@ -306,10 +321,11 @@ mod db {
             }
         }
 
-        pub(crate) async fn get_entries(&self) -> Vec<Entry> {
+        pub(crate) async fn get_entries(&self, filter: fn(e: &Entry) -> bool) -> Vec<Entry> {
             let mut e = self.entries.lock().await
                 .values()
                 .cloned()
+                .filter(filter)
                 .collect::<Vec<Entry>>();
 
             e.sort_by(|a, b| b.published.cmp(&a.published));
@@ -317,17 +333,24 @@ mod db {
         }
 
         pub(crate) async fn get_starred_entries(&self) -> Vec<Entry> {
-            self.get_entries().await
+            self.get_entries(|e| e.starred).await
                 .into_iter()
-                .filter(|e| e.starred)
                 .collect()
         }
 
         pub(crate) async fn get_unread_entries(&self) -> Vec<Entry> {
-            self.get_entries().await
+            self.get_entries(|e| !e.read).await
                 .into_iter()
-                .filter(|e| !e.read)
                 .collect()
+        }
+
+        pub(crate) async fn mark_entry_read(&self, entry_id: String) -> Result<Vec<Entry>, &str> {
+            {
+                let mut out = self.entries.lock().await;
+                let mut e = out.get_mut(&entry_id).ok_or("entry not found")?;
+                e.read = true;
+            }
+            Ok(self.get_entries(|e| !e.read).await)
         }
     }
 }
