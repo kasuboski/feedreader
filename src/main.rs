@@ -328,7 +328,7 @@ mod db {
                 .filter(filter)
                 .collect::<Vec<Entry>>();
 
-            e.sort_by(|a, b| b.published.cmp(&a.published));
+            e.sort_by(|a, b| a.published.cmp(&b.published));
             e
         }
 
