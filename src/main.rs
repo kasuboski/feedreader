@@ -179,8 +179,16 @@ async fn main() {
             for f in feeds.iter() {
                 let feed_resp = client.get(&f.feed_url)
                     .send()
-                    .await
-                    .unwrap();
+                    .await;
+
+                let feed_resp = match feed_resp {
+                    Ok(r) => r,
+                    Err(_) => {
+                        let _ = update_db.update_feed_status(f.feed_url.clone(), Some("couldn't get response".to_string())).await;
+                        continue;
+                    },
+                };
+
                 
                 if feed_resp.status() != reqwest::StatusCode::OK {
                     let _ = update_db.update_feed_status(f.feed_url.clone(), Some("response code not ok".to_string())).await;
@@ -189,7 +197,15 @@ async fn main() {
                 // we don't actually care if this works
                 let _ = update_db.update_feed_status(f.feed_url.clone(), None).await;
 
-                let body = feed_resp.bytes().await.unwrap();
+                let bytes = feed_resp.bytes().await;
+
+                let body = match bytes {
+                    Ok(b) => b,
+                    Err(_) => {
+                        let _ = update_db.update_feed_status(f.feed_url.clone(), Some("couldn't get bytes".to_string())).await;
+                        continue;
+                    },
+                };
                 
                 let feed = parser::parse_with_uri(body.as_ref(), Some(&f.feed_url)).unwrap();
                 let entries: Vec<Entry> = feed.entries
