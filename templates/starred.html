@@ -1,20 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
-  <section>
+  <section hx-headers='{"entry_filter": "starred"}'>
     <h2>Starred</h2>
-    {% for entry in starred %}
-    <article class="border padding-xs margin-bottom-s">
-      <header><hgroup>
-        <h3 class="no-margin-bottom"><a href="{{ entry.content_link }}">{{ entry.title }}</a></h3>
-        <p class="no-margin-top">{{ entry.feed }} | {{ entry.published |humandate }}</p>
-      </hgroup></header>
-      <p class="flex">
-        <a class="padding-right-xs" href="#">Read</a>
-        <a class="padding-right-xs" href="#">Unstar</a>
-        <a class="padding-right-xs" href="#">Comments</a>
-      </p>
-    </article>
-    {% endfor %}
+    {% include "entry_list.html" %}
     <div class="flex-justify-center">
       <a href="#">Previous</a>
       <a href="#">Next</a>

@@ -6,8 +6,20 @@
         <p class="no-margin-top">{{ entry.feed }} | {{ entry.published |humandate }}</p>
       </hgroup></header>
       <p class="flex">
-        <a class="padding-right-xs" href="#" hx-post="/read/{{ entry.id }}" hx-target="#entry_list" hx-swap="outerHTML">Read</a>
-        <a class="padding-right-xs" href="#">Star</a>
+        <a class="padding-right-xs" href="#" hx-post="/read/{{ entry.id }}" hx-target="#entry_list" hx-swap="outerHTML">
+            {% if entry.read %}
+                Mark Unread
+            {% else %}
+                Read
+            {% endif %}
+        </a>
+        <a class="padding-right-xs" href="#" hx-post="/starred/{{ entry.id }}" hx-target="#entry_list" hx-swap="outerHTML">
+            {% if entry.starred %}
+                Unstar
+            {% else %}
+                Star
+            {% endif %}
+        </a>
         <a class="padding-right-xs" href="{{ entry.comments_link }}">Comments</a>
       </p>
     </article>

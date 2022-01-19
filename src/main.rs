@@ -100,6 +100,12 @@ struct IndexTemplate {
 }
 
 #[derive(Template)]
+#[template(path = "history.html")]
+struct HistoryTemplate {
+    entries: Vec<Entry>,
+}
+
+#[derive(Template)]
 #[template(path = "entry_list.html")]
 struct EntryListTemplate {
     entries: Vec<Entry>,
@@ -114,7 +120,7 @@ struct FeedsTemplate {
 #[derive(Template)]
 #[template(path = "starred.html")]
 struct StarredTemplate {
-    starred: Vec<Entry>,
+    entries: Vec<Entry>,
 }
 
 mod filters {
@@ -225,9 +231,11 @@ async fn main() {
     });
 
     let routes = index(db.clone())
+        .or(history(db.clone()))
         .or(get_feeds(db.clone()))
         .or(get_starred(db.clone()))
         .or(mark_entry_read(db.clone()))
+        .or(mark_entry_starred(db.clone()))
         .or(healthz())
         .or(dump(db.clone()))
         .with(log)
@@ -245,6 +253,14 @@ async fn index(#[data] db: db::DB) -> Result<IndexTemplate, Rejection> {
     })
 }
 
+#[get("/history.html")]
+async fn history(#[data] db: db::DB) -> Result<HistoryTemplate, Rejection> {
+    let entries = db.get_entries(|_| true).await;
+    Ok(HistoryTemplate {
+        entries,
+    })
+}
+
 #[get("/feeds.html")]
 async fn get_feeds(#[data] db: db::DB) -> Result<FeedsTemplate, Rejection> {
     let feeds = db.get_feeds().await;
@@ -255,15 +271,23 @@ async fn get_feeds(#[data] db: db::DB) -> Result<FeedsTemplate, Rejection> {
 
 #[get("/starred.html")]
 async fn get_starred(#[data] db: db::DB) -> Result<StarredTemplate, Rejection> {
-    let starred = db.get_starred_entries().await;
+    let entries = db.get_starred_entries().await;
     Ok(StarredTemplate {
-        starred,
+        entries,
     })
 }
 
 #[post("/read/{entry_id}")]
-async fn mark_entry_read(entry_id: String, #[data] db: db::DB, ) -> Result<EntryListTemplate, Rejection> {
-    let entries = db.mark_entry_read(entry_id).await.or(Err(warp::reject::not_found()))?;
+async fn mark_entry_read(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
+    let entries = db.mark_entry_read(entry_id, db::name_to_filter(entry_filter)).await.or(Err(warp::reject::not_found()))?;
+    Ok(EntryListTemplate {
+        entries,
+    })
+}
+
+#[post("/starred/{entry_id}")]
+async fn mark_entry_starred(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
+    let entries = db.mark_entry_starred(entry_id, db::name_to_filter(entry_filter)).await.or(Err(warp::reject::not_found()))?;
     Ok(EntryListTemplate {
         entries,
     })
@@ -299,6 +323,24 @@ mod db {
     pub struct DB {
         feeds: Arc<Mutex<Vec<Feed>>>,
         entries: Arc<Mutex<HashMap<String, Entry>>>,
+    }
+
+    type EntryFilter = fn(e: &Entry) -> bool;
+
+    pub(crate) fn unread_filter(e: &Entry) -> bool {
+        !e.read
+    }
+
+    pub(crate) fn starred_filter(e: &Entry) -> bool {
+        e.starred
+    }
+
+    pub(crate) fn name_to_filter(e: String) -> EntryFilter {
+        match e.as_ref() {
+            "unread" => unread_filter,
+            "starred" => starred_filter,
+            _ => |_| true,
+        }
     }
 
     impl DB {
@@ -337,7 +379,7 @@ mod db {
             }
         }
 
-        pub(crate) async fn get_entries(&self, filter: fn(e: &Entry) -> bool) -> Vec<Entry> {
+        pub(crate) async fn get_entries(&self, filter: EntryFilter) -> Vec<Entry> {
             let mut e = self.entries.lock().await
                 .values()
                 .cloned()
@@ -360,13 +402,22 @@ mod db {
                 .collect()
         }
 
-        pub(crate) async fn mark_entry_read(&self, entry_id: String) -> Result<Vec<Entry>, &str> {
+        pub(crate) async fn mark_entry_read(&self, entry_id: String, filter: EntryFilter) -> Result<Vec<Entry>, &str> {
             {
                 let mut out = self.entries.lock().await;
                 let mut e = out.get_mut(&entry_id).ok_or("entry not found")?;
-                e.read = true;
+                e.read = !e.read;
             }
-            Ok(self.get_entries(|e| !e.read).await)
+            Ok(self.get_entries(filter).await)
+        }
+
+        pub(crate) async fn mark_entry_starred(&self, entry_id: String, filter: EntryFilter) -> Result<Vec<Entry>, &str> {
+            {
+                let mut out = self.entries.lock().await;
+                let mut e = out.get_mut(&entry_id).ok_or("entry not found")?;
+                e.starred = !e.starred;
+            }
+            Ok(self.get_entries(filter).await)
         }
     }
 }
