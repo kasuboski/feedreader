@@ -5,6 +5,7 @@ use rweb::*;
 use askama_warp::Template;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
+use base64;
 use feed_rs::parser;
 use tokio::{task, time};
 
@@ -80,8 +81,10 @@ impl From<&feed_rs::model::Entry> for Entry {
             None => "".to_string(),
         };
 
+        let id = base64::encode_config(e.id.as_bytes(), base64::URL_SAFE);
+
         Entry {
-            id: e.id.clone(),
+            id: id,
             title: title.to_string(),
             content_link: content_link,
             comments_link: comments_link,
@@ -157,15 +160,26 @@ async fn main() {
         ])
         .allow_methods(vec!["GET", "HEAD", "POST", "DELETE"]);
 
-    let feeds = vec![Feed {
-        name: "HackerNews".to_string(),
-        site_url: "https://news.ycombinator.com".to_string(),
-        feed_url: "https://news.ycombinator.com/rss".to_string(),
-        favicon: "https://hackernews.com/favicon".to_string(),
-        last_fetched: Some(Utc::now()),
-        fetch_error: None,
-        category: "tech".to_string(),
-    }];
+    let feeds = vec![
+        Feed {
+            name: "HackerNews".to_string(),
+            site_url: "https://news.ycombinator.com".to_string(),
+            feed_url: "https://news.ycombinator.com/rss".to_string(),
+            favicon: "https://hackernews.com/favicon".to_string(),
+            last_fetched: Some(Utc::now()),
+            fetch_error: None,
+            category: "tech".to_string(),
+        },
+        Feed {
+            name: "Product Hunt".to_string(),
+            site_url: "https://www.producthunt.com".to_string(),
+            feed_url: "https://www.producthunt.com/feed".to_string(),
+            favicon: "https://www.producthunt.com/favicon".to_string(),
+            last_fetched: Some(Utc::now()),
+            fetch_error: None,
+            category: "tech".to_string(),
+        }
+    ];
 
     let db: db::DB = Default::default();
     db.add_feeds(feeds.into_iter()).await;

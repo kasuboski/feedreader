@@ -250,6 +250,7 @@ version = "0.1.0"
 dependencies = [
  "askama",
  "askama_warp",
+ "base64",
  "chrono",
  "chrono-humanize",
  "feed-rs",
