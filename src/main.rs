@@ -1,3 +1,5 @@
+#![warn(clippy::needless_pass_by_value)]
+
 use std::env;
 use std::time::Duration;
 
@@ -341,7 +343,7 @@ async fn post_feed(#[form] body: AddFeedForm,#[data] db: db::DB) -> Result<impl 
 #[post("/read/{entry_id}")]
 async fn mark_entry_read(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
     let entries = db
-        .mark_entry_read(entry_id, db::name_to_filter(entry_filter))
+        .mark_entry_read(entry_id, db::name_to_filter(&entry_filter))
         .await.map_err(|_| warp::reject::not_found())?;
     Ok(EntryListTemplate {
         entries,
@@ -350,7 +352,7 @@ async fn mark_entry_read(entry_id: String, #[header = "entry_filter"] entry_filt
 
 #[post("/starred/{entry_id}")]
 async fn mark_entry_starred(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
-    let entries = db.mark_entry_starred(entry_id, db::name_to_filter(entry_filter))
+    let entries = db.mark_entry_starred(entry_id, db::name_to_filter(&entry_filter))
         .await.map_err(|_| warp::reject::not_found())?;
     Ok(EntryListTemplate {
         entries,
@@ -399,7 +401,7 @@ mod db {
         e.starred
     }
 
-    pub(crate) fn name_to_filter(e: String) -> EntryFilter {
+    pub(crate) fn name_to_filter(e: &str) -> EntryFilter {
         match e.as_ref() {
             "unread" => unread_filter,
             "starred" => starred_filter,
