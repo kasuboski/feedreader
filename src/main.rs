@@ -53,8 +53,8 @@ impl From<&feed_rs::model::Entry> for Entry {
             .iter()
             .take(1)
             .map(|l| l.href.to_string())
-            .nth(0)
-            .unwrap_or("".to_string());
+            .next()
+            .unwrap_or_else(|| "".to_string());
 
         let title = match &e.title {
             Some(t) => &t.content,
@@ -92,11 +92,11 @@ impl From<&feed_rs::model::Entry> for Entry {
         };
 
         Entry {
-            id: id,
+            id,
             title: title.to_string(),
-            content_link: content_link,
-            comments_link: comments_link,
-            published: published,
+            content_link,
+            comments_link,
+            published,
             read: false,
             starred: false,
             ..Default::default()
@@ -164,7 +164,7 @@ mod filters {
 
     pub fn humandate(s: &Option<DateTime<Utc>>) -> ::askama::Result<String> {
         if let Some(date) = s {
-            Ok(format!("{}", HumanTime::from(date.clone())))
+            Ok(format!("{}", HumanTime::from(*date)))
         } else {
             Ok("".to_string())
         }
@@ -342,8 +342,7 @@ async fn post_feed(#[form] body: AddFeedForm,#[data] db: db::DB) -> Result<impl 
 async fn mark_entry_read(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
     let entries = db
         .mark_entry_read(entry_id, db::name_to_filter(entry_filter))
-        .await
-        .or(Err(warp::reject::not_found()))?;
+        .await.map_err(|_| warp::reject::not_found())?;
     Ok(EntryListTemplate {
         entries,
     })
@@ -351,7 +350,8 @@ async fn mark_entry_read(entry_id: String, #[header = "entry_filter"] entry_filt
 
 #[post("/starred/{entry_id}")]
 async fn mark_entry_starred(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
-    let entries = db.mark_entry_starred(entry_id, db::name_to_filter(entry_filter)).await.or(Err(warp::reject::not_found()))?;
+    let entries = db.mark_entry_starred(entry_id, db::name_to_filter(entry_filter))
+        .await.map_err(|_| warp::reject::not_found())?;
     Ok(EntryListTemplate {
         entries,
     })
