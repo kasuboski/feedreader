@@ -10,7 +10,7 @@
     <p class="flex">
       <a class="padding-right-xs" href="#">Refresh</a>
       <a class="padding-right-xs" href="#">Edit</a>
-      <a class="padding-right-xs" href="#">Remove</a>
+      <a class="padding-right-xs" href="#" hx-delete="/feeds/{{ feed.id }}" hx-target="#feed_list" hx-swap="outerHTML">Remove</a>
     </p>
   </article>
   {% endfor %}

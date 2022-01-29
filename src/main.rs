@@ -27,6 +27,7 @@ struct Dump {
 
 #[derive(Default, Debug, Clone, Schema, Deserialize, Serialize)]
 struct Feed {
+    id: String,
     name: String,
     site_url: String,
     feed_url: String,
@@ -34,6 +35,19 @@ struct Feed {
     last_fetched: Option<DateTime<Utc>>,
     fetch_error: Option<String>,
     category: String,
+}
+
+impl Feed {
+    pub fn new(name: String, site_url: String, feed_url: String, category: String) -> Self {
+        Feed {
+            id: base64::encode_config(&feed_url, base64::URL_SAFE),
+            name,
+            site_url,
+            feed_url,
+            category,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, Schema, Deserialize, Serialize)]
@@ -131,6 +145,12 @@ struct FeedsTemplate {
 }
 
 #[derive(Template)]
+#[template(path = "feed_list.html")]
+struct FeedListTemplate {
+    feeds: Vec<Feed>,
+}
+
+#[derive(Template)]
 #[template(path = "starred.html")]
 struct StarredTemplate {
     entries: Vec<Entry>,
@@ -150,13 +170,7 @@ struct AddFeedForm {
 
 impl From<AddFeedForm> for Feed {
     fn from(form: AddFeedForm) -> Self {
-        Feed {
-            name: form.feed_name,
-            site_url: form.site_url,
-            feed_url: form.feed_url,
-            category: form.feed_category,
-            ..Default::default()
-        }
+        Feed::new(form.feed_name, form.site_url, form.feed_url, form.feed_category)
     }
 }
 
@@ -198,6 +212,7 @@ async fn main() {
 
     let feeds = vec![
         Feed {
+            id: base64::encode_config("HackerNews", base64::URL_SAFE),
             name: "HackerNews".to_string(),
             site_url: "https://news.ycombinator.com".to_string(),
             feed_url: "https://news.ycombinator.com/rss".to_string(),
@@ -207,6 +222,7 @@ async fn main() {
             category: "tech".to_string(),
         },
         Feed {
+            id: base64::encode_config("Product Hunt", base64::URL_SAFE),
             name: "Product Hunt".to_string(),
             site_url: "https://www.producthunt.com".to_string(),
             feed_url: "https://www.producthunt.com/feed".to_string(),
@@ -286,6 +302,7 @@ async fn main() {
         .or(get_starred(db.clone()))
         .or(add_feed())
         .or(post_feed(db.clone()))
+        .or(remove_feed(db.clone()))
         .or(mark_entry_read(db.clone()))
         .or(mark_entry_starred(db.clone()))
         .or(healthz())
@@ -338,6 +355,15 @@ async fn add_feed() -> Result<AddFeedTemplate, Rejection> {
 async fn post_feed(#[form] body: AddFeedForm,#[data] db: db::DB) -> Result<impl Reply, Rejection> {
     db.add_feeds(vec![body.into()].into_iter()).await;
     Ok(warp::redirect(Uri::from_static("/feeds.html")))
+}
+
+#[delete("/feeds/{feed_url}")]
+async fn remove_feed(feed_url: String, #[data] db: db::DB) -> Result<FeedListTemplate, Rejection> {
+    db.remove_feed(feed_url).await.map_err(|_| warp::reject::not_found())?;
+    let feeds = db.get_feeds().await;
+    Ok(FeedListTemplate {
+        feeds,
+    })
 }
 
 #[post("/read/{entry_id}")]
@@ -402,7 +428,7 @@ mod db {
     }
 
     pub(crate) fn name_to_filter(e: &str) -> EntryFilter {
-        match e.as_ref() {
+        match e {
             "unread" => unread_filter,
             "starred" => starred_filter,
             _ => |_| true,
@@ -417,6 +443,20 @@ mod db {
 
         pub(crate) async fn get_feeds(&self) -> Vec<Feed>{
             self.feeds.lock().await.to_vec()
+        }
+
+        pub(crate) async fn remove_feed(&self, id: String) -> Result<(), &str> {
+            let mut feeds = self.feeds.lock().await;
+            let pos = feeds
+                .iter()
+                .position(|f| f.id == id);
+
+            if let Some(pos) = pos {
+                feeds.remove(pos);
+                Ok(())
+            } else {
+                Err("feed not found")
+            }
         }
 
         pub(crate) async fn update_feed_status(&self, feed_url: String, error: Option<String>) -> Result<(), &str> {
@@ -511,6 +551,7 @@ mod test {
         let db: db::DB = Default::default();
         let feeds = vec![
             Feed {
+                id: base64::encode_config("HackerNews", base64::URL_SAFE),
                 name: "HackerNews".to_string(),
                 site_url: "https://news.ycombinator.com".to_string(),
                 feed_url: "https://news.ycombinator.com/rss".to_string(),
@@ -520,6 +561,7 @@ mod test {
                 category: "tech".to_string(),
             },
             Feed {
+                id: base64::encode_config("Product Hunt", base64::URL_SAFE),
                 name: "Product Hunt".to_string(),
                 site_url: "https://www.producthunt.com".to_string(),
                 feed_url: "https://www.producthunt.com/feed".to_string(),
@@ -540,6 +582,7 @@ mod test {
     fn render_feedstemplate() {
         let feeds = vec![
             Feed {
+                id: base64::encode_config("HackerNews", base64::URL_SAFE),
                 name: "HackerNews".to_string(),
                 site_url: "https://news.ycombinator.com".to_string(),
                 feed_url: "https://news.ycombinator.com/rss".to_string(),
@@ -549,6 +592,7 @@ mod test {
                 category: "tech".to_string(),
             },
             Feed {
+                id: base64::encode_config("Product Hunt", base64::URL_SAFE),
                 name: "Product Hunt".to_string(),
                 site_url: "https://www.producthunt.com".to_string(),
                 feed_url: "https://www.producthunt.com/feed".to_string(),
