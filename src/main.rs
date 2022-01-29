@@ -2,10 +2,10 @@ use std::env;
 use std::time::Duration;
 
 use rweb::*;
+use warp::http::Uri;
 use askama_warp::Template;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
-use base64;
 use feed_rs::parser;
 use tokio::{task, time};
 
@@ -23,7 +23,7 @@ struct Dump {
     entries: Vec<Entry>,
 }
 
-#[derive(Debug, Clone, Schema, Deserialize, Serialize)]
+#[derive(Default, Debug, Clone, Schema, Deserialize, Serialize)]
 struct Feed {
     name: String,
     site_url: String,
@@ -83,12 +83,20 @@ impl From<&feed_rs::model::Entry> for Entry {
 
         let id = base64::encode_config(e.id.as_bytes(), base64::URL_SAFE);
 
+        let published = if let Some(_p) = e.published {
+            e.published 
+        } else if let Some(_u) = e.updated { 
+            e.updated 
+        } else { 
+            None 
+        };
+
         Entry {
             id: id,
             title: title.to_string(),
             content_link: content_link,
             comments_link: comments_link,
-            published: e.published,
+            published: published,
             read: false,
             starred: false,
             ..Default::default()
@@ -126,14 +134,40 @@ struct StarredTemplate {
     entries: Vec<Entry>,
 }
 
+#[derive(Template)]
+#[template(path = "add_feed.html")]
+struct AddFeedTemplate {}
+
+#[derive(Serialize, Deserialize)]
+struct AddFeedForm {
+    feed_name: String,
+    site_url: String,
+    feed_url: String,
+    feed_category: String,
+}
+
+impl From<AddFeedForm> for Feed {
+    fn from(form: AddFeedForm) -> Self {
+        Feed {
+            name: form.feed_name,
+            site_url: form.site_url,
+            feed_url: form.feed_url,
+            category: form.feed_category,
+            ..Default::default()
+        }
+    }
+}
+
 mod filters {
     use chrono::{DateTime, Utc};
     use chrono_humanize::HumanTime;
-    use std::fmt;
 
     pub fn humandate(s: &Option<DateTime<Utc>>) -> ::askama::Result<String> {
-        let date = s.ok_or(fmt::Error)?;
-        Ok(format!("{}", HumanTime::from(date)))
+        if let Some(date) = s {
+            Ok(format!("{}", HumanTime::from(date.clone())))
+        } else {
+            Ok("".to_string())
+        }
 
     }
 }
@@ -248,6 +282,8 @@ async fn main() {
         .or(history(db.clone()))
         .or(get_feeds(db.clone()))
         .or(get_starred(db.clone()))
+        .or(add_feed())
+        .or(post_feed(db.clone()))
         .or(mark_entry_read(db.clone()))
         .or(mark_entry_starred(db.clone()))
         .or(healthz())
@@ -291,9 +327,23 @@ async fn get_starred(#[data] db: db::DB) -> Result<StarredTemplate, Rejection> {
     })
 }
 
+#[get("/add_feed.html")]
+async fn add_feed() -> Result<AddFeedTemplate, Rejection> {
+    Ok(AddFeedTemplate{})
+}
+
+#[post("/feeds")]
+async fn post_feed(#[form] body: AddFeedForm,#[data] db: db::DB) -> Result<impl Reply, Rejection> {
+    db.add_feeds(vec![body.into()].into_iter()).await;
+    Ok(warp::redirect(Uri::from_static("/feeds.html")))
+}
+
 #[post("/read/{entry_id}")]
 async fn mark_entry_read(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
-    let entries = db.mark_entry_read(entry_id, db::name_to_filter(entry_filter)).await.or(Err(warp::reject::not_found()))?;
+    let entries = db
+        .mark_entry_read(entry_id, db::name_to_filter(entry_filter))
+        .await
+        .or(Err(warp::reject::not_found()))?;
     Ok(EntryListTemplate {
         entries,
     })
@@ -433,5 +483,87 @@ mod db {
             }
             Ok(self.get_entries(filter).await)
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn addfeedform_toform() {
+        let form = AddFeedForm {
+            feed_name: "Martin Fowler".to_string(),
+            feed_url: "https://martinfowler.com/feed.atom".to_string(),
+            site_url: "https://martinfowler.com".to_string(),
+            feed_category: "tech".to_string(),
+        };
+
+        let feed: Feed = form.into();
+        assert_eq!(feed.name, "Martin Fowler");
+        assert_eq!(feed.feed_url, "https://martinfowler.com/feed.atom");
+    }
+
+    #[tokio::test]
+    async fn add_list_feeds() {
+        let db: db::DB = Default::default();
+        let feeds = vec![
+            Feed {
+                name: "HackerNews".to_string(),
+                site_url: "https://news.ycombinator.com".to_string(),
+                feed_url: "https://news.ycombinator.com/rss".to_string(),
+                favicon: "https://hackernews.com/favicon".to_string(),
+                last_fetched: Some(Utc::now()),
+                fetch_error: None,
+                category: "tech".to_string(),
+            },
+            Feed {
+                name: "Product Hunt".to_string(),
+                site_url: "https://www.producthunt.com".to_string(),
+                feed_url: "https://www.producthunt.com/feed".to_string(),
+                favicon: "https://www.producthunt.com/favicon".to_string(),
+                last_fetched: None,
+                fetch_error: None,
+                category: "tech".to_string(),
+            }
+        ];
+
+        db.add_feeds(feeds.into_iter()).await;
+        let f = db.get_feeds().await;
+        assert_eq!(f.len(), 2);
+        assert_eq!(f[0].name, "HackerNews");
+    }
+
+    #[test]
+    fn render_feedstemplate() {
+        let feeds = vec![
+            Feed {
+                name: "HackerNews".to_string(),
+                site_url: "https://news.ycombinator.com".to_string(),
+                feed_url: "https://news.ycombinator.com/rss".to_string(),
+                favicon: "https://hackernews.com/favicon".to_string(),
+                last_fetched: Some(Utc::now()),
+                fetch_error: None,
+                category: "tech".to_string(),
+            },
+            Feed {
+                name: "Product Hunt".to_string(),
+                site_url: "https://www.producthunt.com".to_string(),
+                feed_url: "https://www.producthunt.com/feed".to_string(),
+                favicon: "https://www.producthunt.com/favicon".to_string(),
+                last_fetched: None,
+                fetch_error: None,
+                category: "tech".to_string(),
+            }
+        ];
+        let temp = FeedsTemplate {
+            feeds,
+        };
+
+        assert!(
+            temp.render().is_ok(),
+            "template failed to render"
+        );
+
     }
 }

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<section>
+  <h2>Add Feed</h2>
+  <form method="POST" action="/feeds">
+    <p class="field">
+      <label for="feed_name">Name</label>
+      <input type="text" id="feed_name" name="feed_name"/>
+    </p>
+    <p class="field">
+      <label for="site_url">Site URL</label>
+      <input type="url" id="site_url" name="site_url" />
+    </p>
+    <p class="field">
+      <label for="feed_url">Feed URL</label>
+      <input type="url" id="feed_url" name="feed_url" />
+    </p>
+    <p class="field">
+      <label for="feed_category">Category</label>
+      <input type="text" id="feed_category" name="feed_category" />
+    </p>
+    <p class="field">
+      <button type="submit" class="button">Add Feed</button>
+    </p>
+  </form>
+</section>
+{% endblock %}

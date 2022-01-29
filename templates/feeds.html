@@ -2,18 +2,7 @@
 {% block content %}
   <section>
     <h2>Feeds</h2>
-    {% for feed in feeds %}
-    <article class="border padding-xs margin-bottom-s">
-      <header><hgroup>
-        <h3 class="no-margin-bottom">{{ feed.name }}</a></h3>
-        <p class="no-margin-top">{{ feed.site_url }} | {{ feed.last_fetched |humandate }}</p>
-      </hgroup></header>
-      <p class="flex">
-        <a class="padding-right-xs" href="#">Refresh</a>
-        <a class="padding-right-xs" href="#">Edit</a>
-        <a class="padding-right-xs" href="#">Remove</a>
-      </p>
-    </article>
-    {% endfor %}
+    <a href="/add_feed.html">Add feed</a>
+    {% include "feed_list.html" %}
   </section>
 {% endblock %}
