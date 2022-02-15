@@ -1,7 +1,10 @@
 #![warn(clippy::needless_pass_by_value)]
 
 use std::env;
+use std::fs::File;
 use std::time::Duration;
+
+use anyhow::anyhow;
 
 use rweb::*;
 use warp::http::Uri;
@@ -9,6 +12,7 @@ use askama_warp::Template;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 use feed_rs::parser;
+use opml::OPML;
 use tokio::{task, time};
 
 use regex::Regex;
@@ -210,28 +214,10 @@ async fn main() {
         ])
         .allow_methods(vec!["GET", "HEAD", "POST", "DELETE"]);
 
-    let feeds = vec![
-        Feed {
-            id: base64::encode_config("HackerNews", base64::URL_SAFE),
-            name: "HackerNews".to_string(),
-            site_url: "https://news.ycombinator.com".to_string(),
-            feed_url: "https://news.ycombinator.com/rss".to_string(),
-            favicon: "https://hackernews.com/favicon".to_string(),
-            last_fetched: Some(Utc::now()),
-            fetch_error: None,
-            category: "tech".to_string(),
-        },
-        Feed {
-            id: base64::encode_config("Product Hunt", base64::URL_SAFE),
-            name: "Product Hunt".to_string(),
-            site_url: "https://www.producthunt.com".to_string(),
-            feed_url: "https://www.producthunt.com/feed".to_string(),
-            favicon: "https://www.producthunt.com/favicon".to_string(),
-            last_fetched: Some(Utc::now()),
-            fetch_error: None,
-            category: "tech".to_string(),
-        }
-    ];
+    let mut file = File::open("feeds.opml").expect("Couldn't open feeds.opml");
+    let document = OPML::from_reader(&mut file).expect("Couldn't parse feeds.opml");
+
+    let feeds = parse_opml_document(&document).expect("Couldn't parse opml to feeds");
 
     let db: db::DB = Default::default();
     db.add_feeds(feeds.into_iter()).await;
@@ -248,6 +234,7 @@ async fn main() {
             let feeds = update_db.get_feeds().await;
 
             let mut updated = 0;
+            let start = time::Instant::now();
             for f in feeds.iter() {
                 let feed_resp = client.get(&f.feed_url)
                     .send()
@@ -292,7 +279,7 @@ async fn main() {
                 updated += entries.len();
                 update_db.add_entries(entries.into_iter()).await;
             }
-            println!("found {} entries", updated)
+            println!("found {} entries in {}s", updated, start.elapsed().as_secs())
         }
     });
 
@@ -401,6 +388,23 @@ async fn dump(#[data] db: db::DB) -> Result<Json<Dump>, Rejection> {
         feeds,
         entries,
     }.into())
+}
+
+fn parse_opml_document(document: &opml::OPML) -> Result<Vec<Feed>, anyhow::Error> {
+    let mut feeds = vec![];
+    for c in document.body.outlines.iter() {
+        // expect outlines for each category that consists of an outline for each feed
+        let category_text = c.text.clone();
+        for f in c.outlines.iter() {
+            let name = f.text.clone();
+            let site_url = f.html_url.as_ref().ok_or(anyhow!("Missing html url in feed {}", name))?;
+            let feed_url = f.xml_url.as_ref().ok_or(anyhow!("Missing xml url in feed {}", name))?;
+            let f = Feed::new(name, site_url.clone(), feed_url.clone(), category_text.clone());
+            feeds.push(f);
+        }
+    }
+
+    Ok(feeds)
 }
 
 mod db {
@@ -531,6 +535,19 @@ mod db {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn parse_opml_export() {
+        let mut file = File::open("feeds.opml").expect("Couldn't open feeds.opml");
+        let document = OPML::from_reader(&mut file).expect("Couldn't parse feeds.opml");
+
+        let feeds = parse_opml_document(&document).expect("Couldn't parse opml to feeds");
+        assert_eq!(feeds.len(), 79);
+        assert_eq!(feeds[0].name, "BetterExplained");
+        assert_eq!(feeds[3].name, "Austin Monitor");
+        assert_eq!(feeds[3].category, "Austin");
+        assert_eq!(feeds[3].feed_url, "http://www.austinmonitor.com/feed/");
+    }
 
     #[test]
     fn addfeedform_toform() {
