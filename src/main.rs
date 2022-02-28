@@ -197,6 +197,9 @@ mod filters {
 struct AppError(anyhow::Error);
 impl rweb::reject::Reject for AppError {}
 
+fn reject_anyhow(err: anyhow::Error) -> Rejection {
+    warp::reject::custom(AppError(err))
+}
 
 #[tokio::main]
 async fn main() {
@@ -290,7 +293,9 @@ async fn main() {
                     .collect();
 
                 updated += entries.len();
-                let _ = update_db.add_entries(entries.into_iter()).await;
+                if let Err(e) = update_db.add_entries(entries.into_iter()).await {
+                    error!("couldn't update entries, {:?}", e);
+                }
             }
             println!("found {} entries in {}s", updated, start.elapsed().as_secs())
         }
@@ -324,7 +329,7 @@ async fn main() {
 
 #[get("/")]
 async fn index(#[data] db: db::DB) -> Result<IndexTemplate, Rejection> {
-    let entries = db.get_unread_entries().await.map_err(|err| warp::reject::custom(AppError(err)))?;
+    let entries = db.get_unread_entries().await.map_err(reject_anyhow)?;
     Ok(IndexTemplate {
         entries,
     })
@@ -332,7 +337,7 @@ async fn index(#[data] db: db::DB) -> Result<IndexTemplate, Rejection> {
 
 #[get("/history.html")]
 async fn history(#[data] db: db::DB) -> Result<HistoryTemplate, Rejection> {
-    let entries = db.get_entries(|_| true).await.map_err(|err| warp::reject::custom(AppError(err)))?;
+    let entries = db.get_entries(|_| true).await.map_err(reject_anyhow)?;
     Ok(HistoryTemplate {
         entries,
     })
@@ -340,7 +345,7 @@ async fn history(#[data] db: db::DB) -> Result<HistoryTemplate, Rejection> {
 
 #[get("/feeds.html")]
 async fn get_feeds(#[data] db: db::DB) -> Result<FeedsTemplate, Rejection> {
-    let feeds = db.get_feeds().await.map_err(|_| warp::reject::not_found())?;
+    let feeds = db.get_feeds().await.map_err(reject_anyhow)?;
     Ok(FeedsTemplate {
         feeds,
     })
@@ -348,7 +353,7 @@ async fn get_feeds(#[data] db: db::DB) -> Result<FeedsTemplate, Rejection> {
 
 #[get("/starred.html")]
 async fn get_starred(#[data] db: db::DB) -> Result<StarredTemplate, Rejection> {
-    let entries = db.get_starred_entries().await.map_err(|err| warp::reject::custom(AppError(err)))?;
+    let entries = db.get_starred_entries().await.map_err(reject_anyhow)?;
     Ok(StarredTemplate {
         entries,
     })
@@ -361,14 +366,14 @@ async fn add_feed() -> Result<AddFeedTemplate, Rejection> {
 
 #[post("/feeds")]
 async fn post_feed(#[form] body: AddFeedForm,#[data] db: db::DB) -> Result<impl Reply, Rejection> {
-    db.add_feeds(vec![body.into()].into_iter()).await.map_err(|err| warp::reject::custom(AppError(err)))?;
+    db.add_feeds(vec![body.into()].into_iter()).await.map_err(reject_anyhow)?;
     Ok(warp::redirect(Uri::from_static("/feeds.html")))
 }
 
 #[delete("/feeds/{feed_url}")]
 async fn remove_feed(feed_url: String, #[data] db: db::DB) -> Result<FeedListTemplate, Rejection> {
-    db.remove_feed(feed_url).await.map_err(|_| warp::reject::not_found())?;
-    let feeds = db.get_feeds().await.map_err(|_| warp::reject::not_found())?;
+    db.remove_feed(feed_url).await.map_err(reject_anyhow)?;
+    let feeds = db.get_feeds().await.map_err(reject_anyhow)?;
     Ok(FeedListTemplate {
         feeds,
     })
@@ -378,7 +383,7 @@ async fn remove_feed(feed_url: String, #[data] db: db::DB) -> Result<FeedListTem
 async fn mark_entry_read(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
     let entries = db
         .mark_entry_read(entry_id, db::name_to_filter(&entry_filter))
-        .await.map_err(|_| warp::reject::not_found())?;
+        .await.map_err(reject_anyhow)?;
     Ok(EntryListTemplate {
         entries,
     })
@@ -387,7 +392,7 @@ async fn mark_entry_read(entry_id: String, #[header = "entry_filter"] entry_filt
 #[post("/starred/{entry_id}")]
 async fn mark_entry_starred(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
     let entries = db.mark_entry_starred(entry_id, db::name_to_filter(&entry_filter))
-        .await.map_err(|_| warp::reject::not_found())?;
+        .await.map_err(reject_anyhow)?;
     Ok(EntryListTemplate {
         entries,
     })
@@ -431,11 +436,9 @@ fn parse_opml_document(document: &opml::OPML) -> Result<Vec<Feed>, anyhow::Error
 mod db {
     use std::sync::Arc;
     use futures::lock::Mutex;
-    use std::collections::HashMap;
 
     use chrono::{Utc};
-    use anyhow::anyhow;
-    use anyhow::Context;
+    use anyhow::{Context, Result};
 
     use rusqlite::{Connection, params};
 
@@ -444,14 +447,12 @@ mod db {
     #[derive(Clone)]
     pub struct DB {
         conn: Arc<Mutex<Connection>>,
-        entries: Arc<Mutex<HashMap<String, Entry>>>,
     }
 
-    pub async fn connect() -> Result<DB, anyhow::Error> {
+    pub async fn connect() -> Result<DB> {
         let conn = Connection::open_in_memory()?;
         Ok(DB {
             conn: Arc::new(Mutex::new(conn)),
-            entries: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -475,7 +476,7 @@ mod db {
 
     impl DB {
 
-        pub(crate) async fn init(&self) -> Result<(), anyhow::Error> {
+        pub(crate) async fn init(&self) -> Result<()> {
             let conn = self.conn.lock().await;
             conn.execute_batch(
                 r#"
@@ -506,7 +507,7 @@ CREATE TABLE IF NOT EXISTS entries
             ).context("couldn't init db")
         }
 
-        pub(crate) async fn add_feeds<T>(&self, feeds: T) -> Result<(), anyhow::Error>
+        pub(crate) async fn add_feeds<T>(&self, feeds: T) -> Result<()>
         where T: Iterator<Item = Feed> {
             let mut conn = self.conn.lock().await;
             let tx = conn.transaction()?;
@@ -527,7 +528,7 @@ CREATE TABLE IF NOT EXISTS entries
             Ok(())
         }
 
-        pub(crate) async fn get_feeds(&self) -> Result<Vec<Feed>, anyhow::Error> {
+        pub(crate) async fn get_feeds(&self) -> Result<Vec<Feed>> {
             let conn = self.conn.lock().await;
             let mut stmt = conn.prepare_cached("SELECT id, name, site_url, feed_url, last_fetched, fetch_error, category FROM feeds").context("couldn't prepare statement")?;
             let feed_iter = stmt.query_map([], |row| {
@@ -550,7 +551,7 @@ CREATE TABLE IF NOT EXISTS entries
             Ok(feeds)
         }
 
-        pub(crate) async fn remove_feed(&self, id: String) -> Result<(), anyhow::Error> {
+        pub(crate) async fn remove_feed(&self, id: String) -> Result<()> {
             let conn = self.conn.lock().await;
             let mut stmt = conn.prepare_cached("DELETE FROM feeds WHERE id = ?")?;
             stmt.execute(params![id])?;
@@ -558,7 +559,7 @@ CREATE TABLE IF NOT EXISTS entries
             Ok(())
         }
 
-        pub(crate) async fn update_feed_status(&self, id: String, error: Option<String>) -> Result<(), anyhow::Error> {
+        pub(crate) async fn update_feed_status(&self, id: String, error: Option<String>) -> Result<()> {
             let conn = self.conn.lock().await;
             let mut stmt = conn.prepare_cached(
                 "UPDATE feeds SET fetch_error = ?, last_fetched = ?
@@ -570,17 +571,14 @@ CREATE TABLE IF NOT EXISTS entries
             Ok(())
         }
 
-        pub(crate) async fn add_entries<T>(&self, entries: T) -> Result<(), anyhow::Error>
+        pub(crate) async fn add_entries<T>(&self, entries: T) -> Result<()>
         where T: Iterator<Item = Entry> {
-            // sqlite upsert
-            // https://stackoverflow.com/questions/418898/sqlite-upsert-not-insert-or-replace
             let mut conn = self.conn.lock().await;
             let tx = conn.transaction()?;
             {
                 let mut stmt = tx.prepare_cached(
-                    "INSERT INTO entries (id, title, content_link, comments_link, robust_link, published, read, starred, feed_name)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(id) IGNORE"
+                    "INSERT OR IGNORE INTO entries (id, title, content_link, comments_link, robust_link, published, read, starred, feed_name)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 )?;
                 for e in entries {
                     let _ = stmt.execute(params![e.id, e.title, e.content_link, e.comments_link, e.robust_link, e.published, e.read, e.starred, e.feed]);
@@ -591,7 +589,7 @@ CREATE TABLE IF NOT EXISTS entries
             Ok(())
         }
 
-        pub(crate) async fn get_entries(&self, filter: EntryFilter) -> Result<Vec<Entry>, anyhow::Error> {
+        pub(crate) async fn get_entries(&self, filter: EntryFilter) -> Result<Vec<Entry>> {
             let conn = self.conn.lock().await;
             let mut stmt = conn.prepare_cached("SELECT id, title, content_link, comments_link, robust_link, published, read, starred, feed_name FROM entries ORDER BY published").context("couldn't prepare statement")?;
             let entry_iter = stmt.query_map([], |row| {
@@ -620,28 +618,28 @@ CREATE TABLE IF NOT EXISTS entries
             Ok(entries)
         }
 
-        pub(crate) async fn get_starred_entries(&self) -> Result<Vec<Entry>, anyhow::Error> {
+        pub(crate) async fn get_starred_entries(&self) -> Result<Vec<Entry>> {
             self.get_entries(|e| e.starred).await
         }
 
-        pub(crate) async fn get_unread_entries(&self) -> Result<Vec<Entry>, anyhow::Error> {
+        pub(crate) async fn get_unread_entries(&self) -> Result<Vec<Entry>> {
             self.get_entries(|e| !e.read).await
         }
 
-        pub(crate) async fn mark_entry_read(&self, entry_id: String, filter: EntryFilter) -> Result<Vec<Entry>, anyhow::Error> {
+        pub(crate) async fn mark_entry_read(&self, entry_id: String, filter: EntryFilter) -> Result<Vec<Entry>> {
             {
-                let mut out = self.entries.lock().await;
-                let mut e = out.get_mut(&entry_id).ok_or(anyhow!("entry not found"))?;
-                e.read = !e.read;
+                let conn = self.conn.lock().await;
+                let mut stmt = conn.prepare_cached("UPDATE entries SET read = NOT read WHERE id = ?").context("couldn't prepare statement")?;
+                stmt.execute(params![entry_id])?;
             }
             self.get_entries(filter).await
         }
 
-        pub(crate) async fn mark_entry_starred(&self, entry_id: String, filter: EntryFilter) -> Result<Vec<Entry>, anyhow::Error> {
+        pub(crate) async fn mark_entry_starred(&self, entry_id: String, filter: EntryFilter) -> Result<Vec<Entry>> {
             {
-                let mut out = self.entries.lock().await;
-                let mut e = out.get_mut(&entry_id).ok_or(anyhow!("entry not found"))?;
-                e.starred = !e.starred;
+                let conn = self.conn.lock().await;
+                let mut stmt = conn.prepare_cached("UPDATE entries SET starred = NOT starred WHERE id = ?").context("couldn't prepare statement")?;
+                stmt.execute(params![entry_id])?;
             }
             self.get_entries(filter).await
         }
