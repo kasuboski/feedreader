@@ -68,6 +68,21 @@ struct Entry {
     feed: String,
 }
 
+impl Entry {
+    pub fn new(id: &str, title: String, content_link: String, comments_link: String, published: Option<DateTime<Utc>>) -> Self {
+        Entry {
+            id: base64::encode_config(id.as_bytes(), base64::URL_SAFE),
+            title: title,
+            content_link,
+            comments_link,
+            published,
+            read: false,
+            starred: false,
+            ..Default::default()
+        }
+    }
+}
+
 impl From<&feed_rs::model::Entry> for Entry {
     fn from(e: &feed_rs::model::Entry) -> Self {
         let content_link = e.links
@@ -102,8 +117,6 @@ impl From<&feed_rs::model::Entry> for Entry {
             None => "".to_string(),
         };
 
-        let id = base64::encode_config(e.id.as_bytes(), base64::URL_SAFE);
-
         let published = if let Some(_p) = e.published {
             e.published 
         } else if let Some(_u) = e.updated { 
@@ -112,16 +125,13 @@ impl From<&feed_rs::model::Entry> for Entry {
             None 
         };
 
-        Entry {
-            id,
-            title: title.to_string(),
+        Entry::new(
+            &e.id,
+            title.to_string(),
             content_link,
             comments_link,
-            published,
-            read: false,
-            starred: false,
-            ..Default::default()
-        }
+            published
+        )
     }
 }
 
@@ -228,7 +238,7 @@ async fn main() {
 
     let feeds = parse_opml_document(&document).expect("Couldn't parse opml to feeds");
 
-    let db: db::DB = db::connect().await.expect("couldn't open db");
+    let db: db::DB = db::connect(db::ConnectionBacking::File("./feeds.db".to_string())).await.expect("couldn't open db");
     db.init().await.expect("couldn't init db");
     db.add_feeds(feeds.into_iter()).await.expect("couldn't add feeds");
 
@@ -449,8 +459,17 @@ mod db {
         conn: Arc<Mutex<Connection>>,
     }
 
-    pub async fn connect() -> Result<DB> {
-        let conn = Connection::open_in_memory()?;
+    pub enum ConnectionBacking {
+        #[allow(dead_code)] // used in tests...
+        Memory,
+        File(String),
+    }
+
+    pub async fn connect(conn_back: ConnectionBacking) -> Result<DB> {
+        let conn = match conn_back {
+            ConnectionBacking::File(p) => Connection::open(p)?,
+            ConnectionBacking::Memory => Connection::open_in_memory()?,
+        };
         Ok(DB {
             conn: Arc::new(Mutex::new(conn)),
         })
@@ -679,7 +698,7 @@ mod test {
 
     #[tokio::test]
     async fn add_list_feeds() -> Result<(), anyhow::Error> {
-        let db: db::DB = db::connect().await?;
+        let db: db::DB = db::connect(db::ConnectionBacking::Memory).await?;
         db.init().await?;
         let feeds = vec![
             Feed {
@@ -706,6 +725,23 @@ mod test {
         let f = db.get_feeds().await?;
         assert_eq!(f.len(), 2);
         assert_eq!(f[0].name, "HackerNews");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn add_list_entries() -> Result<(), anyhow::Error> {
+        let db: db::DB = db::connect(db::ConnectionBacking::Memory).await?;
+        db.init().await?;
+        let entries = vec![
+            Entry::new("my-entry", "Cool Post".to_string(), "https://content.com/1".to_string(), "".to_string(), Some(Utc::now())),
+            Entry::new("your-entry", "Gross Post".to_string(), "https://content.com/2".to_string(), "".to_string(), Some(Utc::now())),
+        ];
+
+        db.add_entries(entries.into_iter()).await?;
+        let es = db.get_entries(db::name_to_filter("all")).await?;
+        assert_eq!(es.len(), 2);
+        assert_eq!(es[0].title, "Cool Post");
+        assert_ne!(es[0].id, "my-entry");
         Ok(())
     }
 
