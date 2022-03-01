@@ -1,12 +1,12 @@
 
 tasks:
   - init: |
-      echo 'TODO: build project'
+      cargo build
     command: |
-      echo 'TODO: start app'
+      cargo run
 
 ports:
-- port: 5555
+- port: 3030
   onOpen: open-browser
   
 vscode:
