@@ -15,7 +15,12 @@ use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 use feed_rs::parser;
 use opml::OPML;
-use tokio::{task, time};
+use tokio::time;
+use tokio::signal::unix::{signal, SignalKind};
+use tokio_stream::wrappers::{IntervalStream, SignalStream};
+
+use futures::stream::StreamExt;
+use futures::{future, stream};
 
 use regex::Regex;
 use lazy_static::lazy_static;
@@ -233,30 +238,44 @@ async fn main() {
         ])
         .allow_methods(vec!["GET", "HEAD", "POST", "DELETE"]);
 
-    let mut file = File::open("feeds.opml").expect("Couldn't open feeds.opml");
-    let document = OPML::from_reader(&mut file).expect("Couldn't parse feeds.opml");
-
-    let feeds = parse_opml_document(&document).expect("Couldn't parse opml to feeds");
-
     let db: db::DB = db::connect(db::ConnectionBacking::File("./feeds.db".to_string())).await.expect("couldn't open db");
     db.init().await.expect("couldn't init db");
-    db.add_feeds(feeds.into_iter()).await.expect("couldn't add feeds");
+
+    if let Ok(f) = env::var("FEED_OPML_FILE") {
+        let path = f.clone();
+        let mut file = File::open(path).expect("Couldn't open opml file");
+        let document = OPML::from_reader(&mut file).expect("Couldn't parse opml file");
+
+        let feeds = parse_opml_document(&document).expect("Couldn't parse opml to feeds");
+        db.add_feeds(feeds.into_iter()).await.expect("couldn't add feeds");
+        info!("parsed and loaded {}", f);
+    }
+
+    let mut exit = stream::select_all(vec![
+        SignalStream::new(signal(SignalKind::interrupt()).unwrap()),
+        SignalStream::new(signal(SignalKind::terminate()).unwrap()),
+        SignalStream::new(signal(SignalKind::quit()).unwrap()),
+    ]);
+
+    let default_time = 3*60;
+    let time_interval = match env::var("FEED_REFRESH_INTERVAL") {
+        Ok(i) => i.parse().unwrap_or(default_time),
+        Err(_) => default_time,
+    };
+    let interval = time::interval(Duration::from_secs(time_interval));
 
     let update_db = db.clone();
-    let updater = task::spawn(async move {
-        let time_interval = 30;
-        let mut interval = time::interval(Duration::from_secs(time_interval));
-        let client = reqwest::Client::new();
-
-        loop {
-            interval.tick().await;
+    let stream = IntervalStream::new(interval)
+        .take_until(exit.next())
+        .for_each(|_| async {
+            let client = reqwest::Client::new();
 
             let start = time::Instant::now();
             let feeds = match update_db.get_feeds().await {
                 Ok(feeds) => feeds,
                 Err(err) => {
                     error!("couldn't get feeds, {}", err);
-                    continue;
+                    return;
                 },
             };
 
@@ -307,9 +326,8 @@ async fn main() {
                     error!("couldn't update entries, {:?}", e);
                 }
             }
-            println!("found {} entries in {}s", updated, start.elapsed().as_secs())
-        }
-    });
+            info!("found {} entries in {}s", updated, start.elapsed().as_secs())
+        });
 
     let routes = index(db.clone())
         .or(history(db.clone()))
@@ -333,8 +351,10 @@ async fn main() {
             }
         });
 
-    warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
-    updater.await.expect("updater failed");
+    future::select(
+        Box::pin(stream),
+        Box::pin(warp::serve(routes).run(([0, 0, 0, 0], 3030))),
+    ).await;
 }
 
 #[get("/")]
