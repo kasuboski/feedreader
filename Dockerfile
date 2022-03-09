@@ -12,8 +12,21 @@ COPY . .
 RUN cargo build --release
 
 FROM debian:buster-slim
+
+ENV USER=app
+ENV UID=1000
+
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" \
+    "${USER}"
+
 WORKDIR /feedreader
-COPY --from=build /feedreader/target/release/feedreader feedreader
+COPY --from=build --chown=1000:0 /feedreader/target/release/feedreader feedreader
 
 EXPOSE 3030
 
