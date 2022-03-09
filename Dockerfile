@@ -15,4 +15,6 @@ FROM debian:buster-slim
 WORKDIR /feedreader
 COPY --from=build /feedreader/target/release/feedreader feedreader
 
+EXPOSE 3030
+
 CMD [ "./feedreader" ]
