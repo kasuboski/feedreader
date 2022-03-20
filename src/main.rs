@@ -238,7 +238,10 @@ async fn main() {
         ])
         .allow_methods(vec!["GET", "HEAD", "POST", "DELETE"]);
 
-    let db: db::DB = db::connect(db::ConnectionBacking::File("./feeds.db".to_string())).await.expect("couldn't open db");
+    let db_path = env::var("FEED_DB_PATH")
+        .or::<Result<String, env::VarError>>(Ok("./feeds.db".to_string()))
+        .expect("couldn't set db path");
+    let db: db::DB = db::connect(db::ConnectionBacking::File(&db_path)).await.expect("couldn't open db");
     db.init().await.expect("couldn't init db");
 
     if let Ok(f) = env::var("FEED_OPML_FILE") {
@@ -265,11 +268,16 @@ async fn main() {
     let interval = time::interval(Duration::from_secs(time_interval));
 
     let update_db = db.clone();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .gzip(true)
+        .brotli(true)
+        .build()
+        .expect("couldn't build request client");
+
     let stream = IntervalStream::new(interval)
         .take_until(exit.next())
         .for_each(|_| async {
-            let client = reqwest::Client::new();
-
             let start = time::Instant::now();
             let feeds = match update_db.get_feeds().await {
                 Ok(feeds) => feeds,
@@ -464,6 +472,7 @@ fn parse_opml_document(document: &opml::OPML) -> Result<Vec<Feed>, anyhow::Error
 }
 
 mod db {
+    use std::path::Path;
     use std::sync::Arc;
     use futures::lock::Mutex;
 
@@ -479,13 +488,13 @@ mod db {
         conn: Arc<Mutex<Connection>>,
     }
 
-    pub enum ConnectionBacking {
+    pub enum ConnectionBacking<'a> {
         #[allow(dead_code)] // used in tests...
         Memory,
-        File(String),
+        File(&'a dyn AsRef<Path>),
     }
 
-    pub async fn connect(conn_back: ConnectionBacking) -> Result<DB> {
+    pub async fn connect(conn_back: ConnectionBacking<'_>) -> Result<DB> {
         let conn = match conn_back {
             ConnectionBacking::File(p) => Connection::open(p)?,
             ConnectionBacking::Memory => Connection::open_in_memory()?,
