@@ -268,11 +268,16 @@ async fn main() {
     let interval = time::interval(Duration::from_secs(time_interval));
 
     let update_db = db.clone();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .gzip(true)
+        .brotli(true)
+        .build()
+        .expect("couldn't build request client");
+
     let stream = IntervalStream::new(interval)
         .take_until(exit.next())
         .for_each(|_| async {
-            let client = reqwest::Client::new();
-
             let start = time::Instant::now();
             let feeds = match update_db.get_feeds().await {
                 Ok(feeds) => feeds,
