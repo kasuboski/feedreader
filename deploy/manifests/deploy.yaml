@@ -27,12 +27,12 @@ spec:
         app: feedreader
         app.kubernetes.io/name: feedreader
     spec:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
       containers:
       - name: app
         image: ghcr.io/kasuboski/feedreader:main
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
         env:
         - name: FEED_DB_PATH
           value: "/feedreader/db/feeds.db"

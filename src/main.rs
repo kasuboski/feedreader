@@ -333,6 +333,9 @@ async fn main() {
                 if let Err(e) = update_db.add_entries(entries.into_iter()).await {
                     error!("couldn't update entries, {:?}", e);
                 }
+
+                // set feed error to empty if we made it this far
+                let _ = update_db.update_feed_status(f.id.clone(), None).await;
             }
             info!("found {} entries in {}s", updated, start.elapsed().as_secs())
         });

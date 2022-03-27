@@ -2,8 +2,11 @@ name: ci
 
 on:
   push:
-    branches:
-      - '**'
+    paths:
+    - 'src/**'
+    - 'templates/**'
+    - 'Cargo.*'
+    - 'Dockerfile'
 
 jobs:
   docker:
