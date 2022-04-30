@@ -41,6 +41,17 @@ jobs:
         with:
           version: https://github.com/docker/buildx.git#92009ed03cef7259792f544e1fc6d97214b8e64a
 
+      - name: Store certs
+        shell: bash
+        env:
+          CA_CERT: ${{ secrets.BUILDKIT_CA }}
+          CLIENT_CERT: ${{ secrets.BUILDKIT_CLIENT_CERT }}
+          CLIENT_KEY: ${{ secrets.BUILDKIT_CLIENT_KEY }}
+        run: |
+          echo "$CA_CERT" > ca_cert.pem
+          echo "$CLIENT_CERT" > client_cert.pem
+          echo "$CLIENT_KEY" > key.pem
+
       - name: "Append ARM buildkit builder"
         shell: bash
         run: |
@@ -48,9 +59,9 @@ jobs:
               --node arm \
               --platform linux/arm64 \
               --driver remote \
-              --driver-opt key='${{ secrets.BUILDKIT_CLIENT_KEY }}' \
-              --driver-opt cert='${{ secrets.BUILDKIT_CLIENT_CERT }}' \
-              --driver-opt cacert='${{ secrets.BUILDKIT_CA }}' \
+              --driver-opt key=key.pem \
+              --driver-opt cert=client_cert.pem \
+              --driver-opt cacert=ca_cert.pem \
               tcp://buildkitd:1234
 
       - name: Login to GHCR
