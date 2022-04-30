@@ -57,7 +57,6 @@ jobs:
         run: |
           docker buildx create --append --name ${{ steps.builder.outputs.name }} \
               --node arm \
-              --platform linux/arm64 \
               --driver remote \
               --driver-opt key="$GITHUB_WORKSPACE/key.pem" \
               --driver-opt cert="$GITHUB_WORKSPACE/client_cert.pem" \
