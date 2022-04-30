@@ -29,11 +29,29 @@ jobs:
             type=ref,event=pr
             type=sha
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+      - name: Tailscale
+        uses: tailscale/github-action@v1
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
 
+      # get a specific version for the remote buildx driver
       - name: Set up Docker Buildx
+        id: builder
         uses: docker/setup-buildx-action@v1
+        with:
+          version: https://github.com/docker/buildx.git#92009ed03cef7259792f544e1fc6d97214b8e64a
+
+      - name: "Append ARM buildkit builder"
+        shell: bash
+        run: |
+          docker buildx create --append --name ${{ steps.builder.outputs.name }} \
+              --node arm \
+              --platform linux/arm64 \
+              --driver remote \
+              --driver-opt key=${{ secrets.BUILDKIT_CLIENT_KEY }} \
+              --driver-opt cert=${{ secrets.BUILDKIT_CLIENT_CERT }} \
+              --driver-opt cacert=${{ secrets.BUILDKIT_CA }} \
+              tcp://buildkitd:1234
 
       - name: Login to GHCR
         if: github.event_name != 'pull_request'

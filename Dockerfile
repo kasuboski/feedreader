@@ -1,5 +1,8 @@
+# syntax=docker/dockerfile:1.4
 FROM rust:slim-buster as build
-RUN apt-get update && apt-get install -y libssl-dev pkg-config
+RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+RUN --mount=type=cache,target=/var/cache/apt --mount=type=cache,target=/var/lib/apt \
+  apt update && apt-get --no-install-recommends install -y libssl-dev pkg-config
 
 RUN USER=root cargo new --bin feedreader
 WORKDIR /feedreader
@@ -26,7 +29,7 @@ RUN adduser \
     "${USER}"
 
 WORKDIR /feedreader
-COPY --from=build --chown=1000:0 /feedreader/target/release/feedreader feedreader
+COPY --link --from=build --chown=1000:0 /feedreader/target/release/feedreader feedreader
 
 EXPOSE 3030
 
