@@ -40,6 +40,13 @@ jobs:
         uses: docker/setup-buildx-action@v1
         with:
           version: https://github.com/docker/buildx.git#92009ed03cef7259792f544e1fc6d97214b8e64a
+          use: false
+
+      - name: Setup Actions buildkitd
+        shell: bash
+        run: |
+          docker run -d --name buildkitd --privileged moby/buildkit:latest
+          docker buildx create --name gh-builder --driver remote --use docker-container://buildkitd
 
       - name: Store certs
         shell: bash
@@ -55,7 +62,7 @@ jobs:
       - name: "Append ARM buildkit builder"
         shell: bash
         run: |
-          docker buildx create --append --name ${{ steps.builder.outputs.name }} \
+          docker buildx create --append --name gh-builder \
               --node arm \
               --driver remote \
               --driver-opt key="$GITHUB_WORKSPACE/key.pem" \
