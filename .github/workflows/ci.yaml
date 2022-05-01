@@ -45,8 +45,10 @@ jobs:
       - name: Setup Actions buildkitd
         shell: bash
         run: |
-          docker run -d --name buildkitd --privileged moby/buildkit:latest
-          docker buildx create --name gh-builder --driver remote --use docker-container://buildkitd
+          # should probably still use certs...
+          # https://github.com/moby/buildkit#expose-buildkit-as-a-tcp-service
+          docker run -d --name buildkitd --privileged -p 1234:1234 moby/buildkit:latest --addr tcp://0.0.0.0:1234
+          docker buildx create --name gh-builder --driver remote --use tcp://0.0.0.0:1234
 
       - name: Store certs
         shell: bash
