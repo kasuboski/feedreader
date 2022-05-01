@@ -47,7 +47,7 @@ jobs:
         run: |
           # should probably still use certs...
           # https://github.com/moby/buildkit#expose-buildkit-as-a-tcp-service
-          docker run -d --name buildkitd --privileged -p 1234:1234 moby/buildkit:latest --addr tcp://0.0.0.0:1234
+          docker run -d --name buildkitd --privileged -p 1234:1234 moby/buildkit:buildx-stable-1 --addr tcp://0.0.0.0:1234
           docker buildx create --name gh-builder --driver remote --use tcp://0.0.0.0:1234
           docker buildx inspect --bootstrap
 
