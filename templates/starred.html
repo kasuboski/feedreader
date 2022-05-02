@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-  <section hx-headers='{"entry_filter": "starred"}'>
+  <section hx-headers='{"entry_filter": "starred", "ordering": "ASC"}'>
     <h2>Starred</h2>
     {% include "entry_list.html" %}
     <div class="flex-justify-center">

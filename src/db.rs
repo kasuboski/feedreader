@@ -30,6 +30,21 @@ pub async fn connect(conn_back: ConnectionBacking<'_>) -> Result<DB> {
     })
 }
 
+pub enum Ordering {
+    Ascending,
+    Descending,
+}
+
+impl From<String> for Ordering {
+    fn from(s: String) -> Ordering {
+        match s.as_ref() {
+            "ASC" => Ordering::Ascending,
+            "DESC" => Ordering::Descending,
+            &_ => Ordering::Ascending,
+        }
+    }
+}
+
 type EntryFilter = fn(e: &Entry) -> bool;
 
 pub(crate) fn unread_filter(e: &Entry) -> bool {
@@ -187,9 +202,13 @@ CREATE TABLE IF NOT EXISTS entries
         Ok(())
     }
 
-    pub(crate) async fn get_entries(&self, filter: EntryFilter) -> Result<Vec<Entry>> {
+    pub(crate) async fn get_entries(&self, filter: EntryFilter, ordering: Ordering) -> Result<Vec<Entry>> {
         let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare_cached("SELECT id, title, content_link, comments_link, robust_link, published, read, starred, feed_name FROM entries ORDER BY published").context("couldn't prepare statement")?;
+        let order = match ordering {
+            Ordering::Ascending => "ASC",
+            Ordering::Descending => "DESC",
+        };
+        let mut stmt = conn.prepare_cached(format!("SELECT id, title, content_link, comments_link, robust_link, published, read, starred, feed_name FROM entries ORDER BY published {}", order).as_ref()).context("couldn't prepare statement")?;
         let entry_iter = stmt.query_map([], |row| {
             Ok(Entry {
                 id: row.get(0)?,
@@ -215,17 +234,18 @@ CREATE TABLE IF NOT EXISTS entries
     }
 
     pub(crate) async fn get_starred_entries(&self) -> Result<Vec<Entry>> {
-        self.get_entries(|e| e.starred).await
+        self.get_entries(|e| e.starred, Ordering::Ascending).await
     }
 
     pub(crate) async fn get_unread_entries(&self) -> Result<Vec<Entry>> {
-        self.get_entries(|e| !e.read).await
+        self.get_entries(|e| !e.read, Ordering::Ascending).await
     }
 
     pub(crate) async fn mark_entry_read(
         &self,
         entry_id: String,
         filter: EntryFilter,
+        ordering: Ordering,
     ) -> Result<Vec<Entry>> {
         {
             let conn = self.conn.lock().await;
@@ -234,13 +254,14 @@ CREATE TABLE IF NOT EXISTS entries
                 .context("couldn't prepare statement")?;
             stmt.execute(params![entry_id])?;
         }
-        self.get_entries(filter).await
+        self.get_entries(filter, ordering).await
     }
 
     pub(crate) async fn mark_entry_starred(
         &self,
         entry_id: String,
         filter: EntryFilter,
+        ordering: Ordering,
     ) -> Result<Vec<Entry>> {
         {
             let conn = self.conn.lock().await;
@@ -249,5 +270,5 @@ CREATE TABLE IF NOT EXISTS entries
                 .context("couldn't prepare statement")?;
             stmt.execute(params![entry_id])?;
         }
-        self.get_entries(filter).await
+        self.get_entries(filter, ordering).await
     }}
