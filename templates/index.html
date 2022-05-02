@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-  <section hx-headers='{"entry_filter": "unread"}'>
+  <section hx-headers='{"entry_filter": "unread", "ordering": "ASC"}'>
     <h2>Unread</h2>
     {% include "entry_list.html" %}
     <div class="flex-justify-center">
