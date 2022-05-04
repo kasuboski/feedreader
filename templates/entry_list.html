@@ -23,7 +23,9 @@
         Star
         {% endif %}
       </a>
+      {% if entry.comments_link.len() != 0 %}
       <a class="padding-right-xs" href="{{ entry.comments_link }}">Comments</a>
+      {% endif %}
     </p>
   </article>
   {% endfor %}
