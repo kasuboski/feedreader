@@ -321,7 +321,14 @@ async fn main() {
                     },
                 };
                 
-                let feed = parser::parse_with_uri(body.as_ref(), Some(&f.feed_url)).unwrap();
+                let feed = match parser::parse_with_uri(body.as_ref(), Some(&f.feed_url)) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        error!("Couldn't parse feed {}: {}", &f.feed_url, e);
+                        let _ = update_db.update_feed_status(f.id.clone(), Some("couldn't parse feed".to_string())).await;
+                        continue;
+                    },
+                };
                 let entries: Vec<Entry> = feed.entries
                     .iter()
                     .map(|e| {
