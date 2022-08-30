@@ -30,6 +30,7 @@ jobs:
             type=sha
 
       - name: Tailscale
+        timeout-minutes: 10 # the action will just try connecting forever
         uses: tailscale/github-action@v1
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
@@ -39,7 +40,6 @@ jobs:
         id: builder
         uses: docker/setup-buildx-action@v1
         with:
-          version: https://github.com/docker/buildx.git#92009ed03cef7259792f544e1fc6d97214b8e64a
           use: false
 
       - name: Setup Actions buildkitd
