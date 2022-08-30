@@ -27,6 +27,10 @@ RUN adduser \
     --no-create-home \
     --uid "${UID}" \
     "${USER}"
+    
+RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+RUN --mount=type=cache,target=/var/cache/apt --mount=type=cache,target=/var/lib/apt \
+  apt-get update && apt-get --no-install-recommends install -y sqlite3
 
 WORKDIR /feedreader
 COPY --link --from=build --chown=1000:0 /feedreader/target/release/feedreader feedreader
