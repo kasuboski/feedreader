@@ -2,7 +2,7 @@ use futures::lock::Mutex;
 use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 
 use rusqlite::{params, Connection};
@@ -45,21 +45,19 @@ impl From<String> for Ordering {
     }
 }
 
-type EntryFilter = fn(e: &Entry) -> bool;
-
-pub(crate) fn unread_filter(e: &Entry) -> bool {
-    !e.read
+pub enum EntryFilter {
+    Unread,
+    Starred,
+    All,
 }
 
-pub(crate) fn starred_filter(e: &Entry) -> bool {
-    e.starred
-}
-
-pub(crate) fn name_to_filter(e: &str) -> EntryFilter {
-    match e {
-        "unread" => unread_filter,
-        "starred" => starred_filter,
-        _ => |_| true,
+impl From<String> for EntryFilter {
+    fn from(s: String) -> EntryFilter {
+        match s.as_str() {
+            "unread" => EntryFilter::Unread,
+            "starred" => EntryFilter::Starred,
+            _ => EntryFilter::All,
+        } 
     }
 }
 
@@ -204,11 +202,18 @@ CREATE TABLE IF NOT EXISTS entries
 
     pub(crate) async fn get_entries(&self, filter: EntryFilter, ordering: Ordering) -> Result<Vec<Entry>> {
         let conn = self.conn.lock().await;
-        let order = match ordering {
-            Ordering::Ascending => "ASC",
-            Ordering::Descending => "DESC",
+        let order_clause = match ordering {
+            Ordering::Ascending => "ORDER BY published ASC",
+            Ordering::Descending => "ORDER BY published DESC",
         };
-        let mut stmt = conn.prepare_cached(format!("SELECT id, title, content_link, comments_link, robust_link, published, read, starred, feed_name FROM entries ORDER BY published {}", order).as_ref()).context("couldn't prepare statement")?;
+
+        let where_clause = match filter {
+            EntryFilter::Starred => "WHERE starred = true",
+            EntryFilter::Unread => "WHERE read = false",
+            EntryFilter::All => "",
+        };
+        let statement_string = format!("SELECT id, title, content_link, comments_link, robust_link, published, read, starred, feed_name FROM entries {} {}", where_clause, order_clause); 
+        let mut stmt = conn.prepare_cached(&statement_string).context("couldn't prepare statement")?;
         let entry_iter = stmt.query_map([], |row| {
             Ok(Entry {
                 id: row.get(0)?,
@@ -222,23 +227,15 @@ CREATE TABLE IF NOT EXISTS entries
                 feed: row.get(8)?,
             })
         })?;
-
-        let mut entries: Vec<Entry> = vec![];
-        for e in entry_iter {
-            let e = e.unwrap();
-            if filter(&e) {
-                entries.push(e)
-            }
-        }
-        Ok(entries)
+        entry_iter.into_iter().map(|e| e.map_err(|err| anyhow!(err))).collect()
     }
 
     pub(crate) async fn get_starred_entries(&self) -> Result<Vec<Entry>> {
-        self.get_entries(|e| e.starred, Ordering::Ascending).await
+        self.get_entries(EntryFilter::Starred, Ordering::Ascending).await
     }
 
     pub(crate) async fn get_unread_entries(&self) -> Result<Vec<Entry>> {
-        self.get_entries(|e| !e.read, Ordering::Ascending).await
+        self.get_entries(EntryFilter::Unread, Ordering::Ascending).await
     }
 
     pub(crate) async fn mark_entry_read(

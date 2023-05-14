@@ -387,7 +387,7 @@ async fn index(#[data] db: db::DB) -> Result<IndexTemplate, Rejection> {
 
 #[get("/history.html")]
 async fn history(#[data] db: db::DB) -> Result<HistoryTemplate, Rejection> {
-    let entries = db.get_entries(|_| true, db::Ordering::Descending).await.map_err(reject_anyhow)?;
+    let entries = db.get_entries(db::EntryFilter::All, db::Ordering::Descending).await.map_err(reject_anyhow)?;
     Ok(HistoryTemplate {
         entries,
     })
@@ -432,7 +432,7 @@ async fn remove_feed(feed_url: String, #[data] db: db::DB) -> Result<FeedListTem
 #[post("/read/{entry_id}")]
 async fn mark_entry_read(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[header = "ordering"] ordering: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
     let entries = db
-        .mark_entry_read(entry_id, db::name_to_filter(&entry_filter), ordering.into())
+        .mark_entry_read(entry_id, entry_filter.into(), ordering.into())
         .await.map_err(reject_anyhow)?;
     Ok(EntryListTemplate {
         entries,
@@ -441,7 +441,7 @@ async fn mark_entry_read(entry_id: String, #[header = "entry_filter"] entry_filt
 
 #[post("/starred/{entry_id}")]
 async fn mark_entry_starred(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[header = "ordering"] ordering: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
-    let entries = db.mark_entry_starred(entry_id, db::name_to_filter(&entry_filter), ordering.into())
+    let entries = db.mark_entry_starred(entry_id, entry_filter.into(), ordering.into())
         .await.map_err(reject_anyhow)?;
     Ok(EntryListTemplate {
         entries,
@@ -458,7 +458,7 @@ fn healthz() -> Json<Healthz> {
 #[get("/dump")]
 async fn dump(#[data] db: db::DB) -> Result<Json<Dump>, Rejection> {
     let feeds = db.get_feeds().await.map_err(|err| warp::reject::custom(AppError(err)))?;
-    let entries = db.get_entries(|_| true, db::Ordering::Descending).await.map_err(|err| warp::reject::custom(AppError(err)))?;
+    let entries = db.get_entries(db::EntryFilter::All, db::Ordering::Descending).await.map_err(|err| warp::reject::custom(AppError(err)))?;
 
     Ok(Dump {
         feeds,
@@ -556,7 +556,7 @@ mod test {
         ];
 
         db.add_entries(entries.into_iter()).await?;
-        let es = db.get_entries(db::name_to_filter("all"), db::Ordering::Ascending).await?;
+        let es = db.get_entries(db::EntryFilter::All, db::Ordering::Ascending).await?;
         assert_eq!(es.len(), 2);
         assert_eq!(es[0].title, "Cool Post");
         assert_ne!(es[0].id, "my-entry");
