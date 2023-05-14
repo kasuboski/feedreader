@@ -57,7 +57,7 @@ impl From<String> for EntryFilter {
             "unread" => EntryFilter::Unread,
             "starred" => EntryFilter::Starred,
             _ => EntryFilter::All,
-        } 
+        }
     }
 }
 
@@ -200,7 +200,11 @@ CREATE TABLE IF NOT EXISTS entries
         Ok(())
     }
 
-    pub(crate) async fn get_entries(&self, filter: EntryFilter, ordering: Ordering) -> Result<Vec<Entry>> {
+    pub(crate) async fn get_entries(
+        &self,
+        filter: EntryFilter,
+        ordering: Ordering,
+    ) -> Result<Vec<Entry>> {
         let conn = self.conn.lock().await;
         let order_clause = match ordering {
             Ordering::Ascending => "ORDER BY published ASC",
@@ -212,8 +216,10 @@ CREATE TABLE IF NOT EXISTS entries
             EntryFilter::Unread => "WHERE read = false",
             EntryFilter::All => "",
         };
-        let statement_string = format!("SELECT id, title, content_link, comments_link, robust_link, published, read, starred, feed_name FROM entries {} {}", where_clause, order_clause); 
-        let mut stmt = conn.prepare_cached(&statement_string).context("couldn't prepare statement")?;
+        let statement_string = format!("SELECT id, title, content_link, comments_link, robust_link, published, read, starred, feed_name FROM entries {} {}", where_clause, order_clause);
+        let mut stmt = conn
+            .prepare_cached(&statement_string)
+            .context("couldn't prepare statement")?;
         let entry_iter = stmt.query_map([], |row| {
             Ok(Entry {
                 id: row.get(0)?,
@@ -227,15 +233,20 @@ CREATE TABLE IF NOT EXISTS entries
                 feed: row.get(8)?,
             })
         })?;
-        entry_iter.into_iter().map(|e| e.map_err(|err| anyhow!(err))).collect()
+        entry_iter
+            .into_iter()
+            .map(|e| e.map_err(|err| anyhow!(err)))
+            .collect()
     }
 
     pub(crate) async fn get_starred_entries(&self) -> Result<Vec<Entry>> {
-        self.get_entries(EntryFilter::Starred, Ordering::Ascending).await
+        self.get_entries(EntryFilter::Starred, Ordering::Ascending)
+            .await
     }
 
     pub(crate) async fn get_unread_entries(&self) -> Result<Vec<Entry>> {
-        self.get_entries(EntryFilter::Unread, Ordering::Ascending).await
+        self.get_entries(EntryFilter::Unread, Ordering::Ascending)
+            .await
     }
 
     pub(crate) async fn mark_entry_read(
@@ -268,4 +279,5 @@ CREATE TABLE IF NOT EXISTS entries
             stmt.execute(params![entry_id])?;
         }
         self.get_entries(filter, ordering).await
-    }}
+    }
+}
