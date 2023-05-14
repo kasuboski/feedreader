@@ -4,26 +4,27 @@ use std::env;
 use std::fs::File;
 use std::time::Duration;
 
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 
 use anyhow::anyhow;
 
-use rweb::*;
-use warp::http::Uri;
 use askama_warp::Template;
-use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 use feed_rs::parser;
 use opml::OPML;
-use tokio::time;
+use rweb::*;
+use serde::{Deserialize, Serialize};
 use tokio::signal::unix::{signal, SignalKind};
+use tokio::time;
 use tokio_stream::wrappers::{IntervalStream, SignalStream};
+use warp::http::Uri;
 
 use futures::stream::StreamExt;
 use futures::{future, stream};
 
-use regex::Regex;
 use lazy_static::lazy_static;
+use regex::Regex;
 
 mod db;
 
@@ -76,7 +77,13 @@ struct Entry {
 }
 
 impl Entry {
-    pub fn new(id: &str, title: String, content_link: String, comments_link: String, published: Option<DateTime<Utc>>) -> Self {
+    pub fn new(
+        id: &str,
+        title: String,
+        content_link: String,
+        comments_link: String,
+        published: Option<DateTime<Utc>>,
+    ) -> Self {
         Entry {
             id: base64::encode_config(id.as_bytes(), base64::URL_SAFE),
             title: title,
@@ -92,7 +99,8 @@ impl Entry {
 
 impl From<&feed_rs::model::Entry> for Entry {
     fn from(e: &feed_rs::model::Entry) -> Self {
-        let content_link = e.links
+        let content_link = e
+            .links
             .iter()
             .take(1)
             .map(|l| l.href.to_string())
@@ -125,11 +133,11 @@ impl From<&feed_rs::model::Entry> for Entry {
         };
 
         let published = if let Some(_p) = e.published {
-            e.published 
-        } else if let Some(_u) = e.updated { 
-            e.updated 
-        } else { 
-            None 
+            e.published
+        } else if let Some(_u) = e.updated {
+            e.updated
+        } else {
+            None
         };
 
         Entry::new(
@@ -137,7 +145,7 @@ impl From<&feed_rs::model::Entry> for Entry {
             title.to_string(),
             content_link,
             comments_link,
-            published
+            published,
         )
     }
 }
@@ -192,7 +200,12 @@ struct AddFeedForm {
 
 impl From<AddFeedForm> for Feed {
     fn from(form: AddFeedForm) -> Self {
-        Feed::new(form.feed_name, form.site_url, form.feed_url, form.feed_category)
+        Feed::new(
+            form.feed_name,
+            form.site_url,
+            form.feed_url,
+            form.feed_category,
+        )
     }
 }
 
@@ -206,7 +219,6 @@ mod filters {
         } else {
             Ok("".to_string())
         }
-
     }
 }
 
@@ -243,7 +255,9 @@ async fn main() {
     let db_path = env::var("FEED_DB_PATH")
         .or::<Result<String, env::VarError>>(Ok("./feeds.db".to_string()))
         .expect("couldn't set db path");
-    let db: db::DB = db::connect(db::ConnectionBacking::File(&db_path)).await.expect("couldn't open db");
+    let db: db::DB = db::connect(db::ConnectionBacking::File(&db_path))
+        .await
+        .expect("couldn't open db");
     db.init().await.expect("couldn't init db");
 
     if let Ok(f) = env::var("FEED_OPML_FILE") {
@@ -252,7 +266,9 @@ async fn main() {
         let document = OPML::from_reader(&mut file).expect("Couldn't parse opml file");
 
         let feeds = parse_opml_document(&document).expect("Couldn't parse opml to feeds");
-        db.add_feeds(feeds.into_iter()).await.expect("couldn't add feeds");
+        db.add_feeds(feeds.into_iter())
+            .await
+            .expect("couldn't add feeds");
         info!("parsed and loaded {}", f);
     }
 
@@ -262,7 +278,7 @@ async fn main() {
         SignalStream::new(signal(SignalKind::quit()).unwrap()),
     ]);
 
-    let default_time = 3*60;
+    let default_time = 3 * 60;
     let time_interval = match env::var("FEED_REFRESH_INTERVAL") {
         Ok(i) => i.parse().unwrap_or(default_time),
         Err(_) => default_time,
@@ -286,26 +302,30 @@ async fn main() {
                 Err(err) => {
                     error!("couldn't get feeds, {}", err);
                     return;
-                },
+                }
             };
 
             let mut updated = 0;
             for f in feeds.iter() {
-                let feed_resp = client.get(&f.feed_url)
-                    .send()
-                    .await;
+                let feed_resp = client.get(&f.feed_url).send().await;
 
                 let feed_resp = match feed_resp {
                     Ok(r) => r,
                     Err(_) => {
-                        let _ = update_db.update_feed_status(f.id.clone(), Some("couldn't get response".to_string())).await;
+                        let _ = update_db
+                            .update_feed_status(
+                                f.id.clone(),
+                                Some("couldn't get response".to_string()),
+                            )
+                            .await;
                         continue;
-                    },
+                    }
                 };
 
-                
                 if feed_resp.status() != reqwest::StatusCode::OK {
-                    let _ = update_db.update_feed_status(f.id.clone(), Some("response code not ok".to_string())).await;
+                    let _ = update_db
+                        .update_feed_status(f.id.clone(), Some("response code not ok".to_string()))
+                        .await;
                     continue;
                 }
                 // we don't actually care if this works
@@ -316,20 +336,31 @@ async fn main() {
                 let body = match bytes {
                     Ok(b) => b,
                     Err(_) => {
-                        let _ = update_db.update_feed_status(f.id.clone(), Some("couldn't get bytes".to_string())).await;
+                        let _ = update_db
+                            .update_feed_status(
+                                f.id.clone(),
+                                Some("couldn't get bytes".to_string()),
+                            )
+                            .await;
                         continue;
-                    },
+                    }
                 };
-                
+
                 let feed = match parser::parse_with_uri(body.as_ref(), Some(&f.feed_url)) {
                     Ok(f) => f,
                     Err(e) => {
                         error!("Couldn't parse feed {}: {}", &f.feed_url, e);
-                        let _ = update_db.update_feed_status(f.id.clone(), Some("couldn't parse feed".to_string())).await;
+                        let _ = update_db
+                            .update_feed_status(
+                                f.id.clone(),
+                                Some("couldn't parse feed".to_string()),
+                            )
+                            .await;
                         continue;
-                    },
+                    }
                 };
-                let entries: Vec<Entry> = feed.entries
+                let entries: Vec<Entry> = feed
+                    .entries
                     .iter()
                     .map(|e| {
                         let mut o: Entry = e.into();
@@ -346,7 +377,11 @@ async fn main() {
                 // set feed error to empty if we made it this far
                 let _ = update_db.update_feed_status(f.id.clone(), None).await;
             }
-            info!("found {} entries in {}s", updated, start.elapsed().as_secs())
+            info!(
+                "found {} entries in {}s",
+                updated,
+                start.elapsed().as_secs()
+            )
         });
 
     let routes = index(db.clone())
@@ -374,49 +409,47 @@ async fn main() {
     future::select(
         Box::pin(stream),
         Box::pin(warp::serve(routes).run(([0, 0, 0, 0], 3030))),
-    ).await;
+    )
+    .await;
 }
 
 #[get("/")]
 async fn index(#[data] db: db::DB) -> Result<IndexTemplate, Rejection> {
     let entries = db.get_unread_entries().await.map_err(reject_anyhow)?;
-    Ok(IndexTemplate {
-        entries,
-    })
+    Ok(IndexTemplate { entries })
 }
 
 #[get("/history.html")]
 async fn history(#[data] db: db::DB) -> Result<HistoryTemplate, Rejection> {
-    let entries = db.get_entries(|_| true, db::Ordering::Descending).await.map_err(reject_anyhow)?;
-    Ok(HistoryTemplate {
-        entries,
-    })
+    let entries = db
+        .get_entries(db::EntryFilter::All, db::Ordering::Descending)
+        .await
+        .map_err(reject_anyhow)?;
+    Ok(HistoryTemplate { entries })
 }
 
 #[get("/feeds.html")]
 async fn get_feeds(#[data] db: db::DB) -> Result<FeedsTemplate, Rejection> {
     let feeds = db.get_feeds().await.map_err(reject_anyhow)?;
-    Ok(FeedsTemplate {
-        feeds,
-    })
+    Ok(FeedsTemplate { feeds })
 }
 
 #[get("/starred.html")]
 async fn get_starred(#[data] db: db::DB) -> Result<StarredTemplate, Rejection> {
     let entries = db.get_starred_entries().await.map_err(reject_anyhow)?;
-    Ok(StarredTemplate {
-        entries,
-    })
+    Ok(StarredTemplate { entries })
 }
 
 #[get("/add_feed.html")]
 async fn add_feed() -> Result<AddFeedTemplate, Rejection> {
-    Ok(AddFeedTemplate{})
+    Ok(AddFeedTemplate {})
 }
 
 #[post("/feeds")]
-async fn post_feed(#[form] body: AddFeedForm,#[data] db: db::DB) -> Result<impl Reply, Rejection> {
-    db.add_feeds(vec![body.into()].into_iter()).await.map_err(reject_anyhow)?;
+async fn post_feed(#[form] body: AddFeedForm, #[data] db: db::DB) -> Result<impl Reply, Rejection> {
+    db.add_feeds(vec![body.into()].into_iter())
+        .await
+        .map_err(reject_anyhow)?;
     Ok(warp::redirect(Uri::from_static("/feeds.html")))
 }
 
@@ -424,46 +457,54 @@ async fn post_feed(#[form] body: AddFeedForm,#[data] db: db::DB) -> Result<impl 
 async fn remove_feed(feed_url: String, #[data] db: db::DB) -> Result<FeedListTemplate, Rejection> {
     db.remove_feed(feed_url).await.map_err(reject_anyhow)?;
     let feeds = db.get_feeds().await.map_err(reject_anyhow)?;
-    Ok(FeedListTemplate {
-        feeds,
-    })
+    Ok(FeedListTemplate { feeds })
 }
 
 #[post("/read/{entry_id}")]
-async fn mark_entry_read(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[header = "ordering"] ordering: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
+async fn mark_entry_read(
+    entry_id: String,
+    #[header = "entry_filter"] entry_filter: String,
+    #[header = "ordering"] ordering: String,
+    #[data] db: db::DB,
+) -> Result<EntryListTemplate, Rejection> {
     let entries = db
-        .mark_entry_read(entry_id, db::name_to_filter(&entry_filter), ordering.into())
-        .await.map_err(reject_anyhow)?;
-    Ok(EntryListTemplate {
-        entries,
-    })
+        .mark_entry_read(entry_id, entry_filter.into(), ordering.into())
+        .await
+        .map_err(reject_anyhow)?;
+    Ok(EntryListTemplate { entries })
 }
 
 #[post("/starred/{entry_id}")]
-async fn mark_entry_starred(entry_id: String, #[header = "entry_filter"] entry_filter: String, #[header = "ordering"] ordering: String, #[data] db: db::DB) -> Result<EntryListTemplate, Rejection> {
-    let entries = db.mark_entry_starred(entry_id, db::name_to_filter(&entry_filter), ordering.into())
-        .await.map_err(reject_anyhow)?;
-    Ok(EntryListTemplate {
-        entries,
-    })
+async fn mark_entry_starred(
+    entry_id: String,
+    #[header = "entry_filter"] entry_filter: String,
+    #[header = "ordering"] ordering: String,
+    #[data] db: db::DB,
+) -> Result<EntryListTemplate, Rejection> {
+    let entries = db
+        .mark_entry_starred(entry_id, entry_filter.into(), ordering.into())
+        .await
+        .map_err(reject_anyhow)?;
+    Ok(EntryListTemplate { entries })
 }
 
 #[get("/healthz")]
 fn healthz() -> Json<Healthz> {
-    Healthz {
-        up: true
-    }.into()
+    Healthz { up: true }.into()
 }
 
 #[get("/dump")]
 async fn dump(#[data] db: db::DB) -> Result<Json<Dump>, Rejection> {
-    let feeds = db.get_feeds().await.map_err(|err| warp::reject::custom(AppError(err)))?;
-    let entries = db.get_entries(|_| true, db::Ordering::Descending).await.map_err(|err| warp::reject::custom(AppError(err)))?;
+    let feeds = db
+        .get_feeds()
+        .await
+        .map_err(|err| warp::reject::custom(AppError(err)))?;
+    let entries = db
+        .get_entries(db::EntryFilter::All, db::Ordering::Descending)
+        .await
+        .map_err(|err| warp::reject::custom(AppError(err)))?;
 
-    Ok(Dump {
-        feeds,
-        entries,
-    }.into())
+    Ok(Dump { feeds, entries }.into())
 }
 
 fn parse_opml_document(document: &opml::OPML) -> Result<Vec<Feed>, anyhow::Error> {
@@ -473,9 +514,20 @@ fn parse_opml_document(document: &opml::OPML) -> Result<Vec<Feed>, anyhow::Error
         let category_text = c.text.clone();
         for f in c.outlines.iter() {
             let name = f.text.clone();
-            let site_url = f.html_url.as_ref().ok_or(anyhow!("Missing html url in feed {}", name))?;
-            let feed_url = f.xml_url.as_ref().ok_or(anyhow!("Missing xml url in feed {}", name))?;
-            let f = Feed::new(name, site_url.clone(), feed_url.clone(), category_text.clone());
+            let site_url = f
+                .html_url
+                .as_ref()
+                .ok_or(anyhow!("Missing html url in feed {}", name))?;
+            let feed_url = f
+                .xml_url
+                .as_ref()
+                .ok_or(anyhow!("Missing xml url in feed {}", name))?;
+            let f = Feed::new(
+                name,
+                site_url.clone(),
+                feed_url.clone(),
+                category_text.clone(),
+            );
             feeds.push(f);
         }
     }
@@ -536,7 +588,7 @@ mod test {
                 last_fetched: None,
                 fetch_error: None,
                 category: "tech".to_string(),
-            }
+            },
         ];
 
         db.add_feeds(feeds.into_iter()).await?;
@@ -551,12 +603,26 @@ mod test {
         let db: db::DB = db::connect(db::ConnectionBacking::Memory).await?;
         db.init().await?;
         let entries = vec![
-            Entry::new("my-entry", "Cool Post".to_string(), "https://content.com/1".to_string(), "".to_string(), Some(Utc::now())),
-            Entry::new("your-entry", "Gross Post".to_string(), "https://content.com/2".to_string(), "".to_string(), Some(Utc::now())),
+            Entry::new(
+                "my-entry",
+                "Cool Post".to_string(),
+                "https://content.com/1".to_string(),
+                "".to_string(),
+                Some(Utc::now()),
+            ),
+            Entry::new(
+                "your-entry",
+                "Gross Post".to_string(),
+                "https://content.com/2".to_string(),
+                "".to_string(),
+                Some(Utc::now()),
+            ),
         ];
 
         db.add_entries(entries.into_iter()).await?;
-        let es = db.get_entries(db::name_to_filter("all"), db::Ordering::Ascending).await?;
+        let es = db
+            .get_entries(db::EntryFilter::All, db::Ordering::Ascending)
+            .await?;
         assert_eq!(es.len(), 2);
         assert_eq!(es[0].title, "Cool Post");
         assert_ne!(es[0].id, "my-entry");
@@ -583,16 +649,10 @@ mod test {
                 last_fetched: None,
                 fetch_error: None,
                 category: "tech".to_string(),
-            }
+            },
         ];
-        let temp = FeedsTemplate {
-            feeds,
-        };
+        let temp = FeedsTemplate { feeds };
 
-        assert!(
-            temp.render().is_ok(),
-            "template failed to render"
-        );
-
+        assert!(temp.render().is_ok(), "template failed to render");
     }
 }
