@@ -73,6 +73,7 @@ jobs:
               --driver-opt cacert="$GITHUB_WORKSPACE/ca_cert.pem" \
               tcp://buildkitd:1234
           docker buildx ls
+          docker buildx inspect --bootstrap
 
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
