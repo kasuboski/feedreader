@@ -68,12 +68,18 @@
           .packages
           .${system}
           .bin;
+        image = pkgs.dockerTools.streamLayeredImage {
+          name = "feedreader";
+          config = {
+            Cmd = [ "${bin}/bin/feedreader" ];
+          };
+        };
       in {
         formatter = pkgs.alejandra;
         packages = {
           # that way we can build `bin` specifically,
           # but it's also the default.
-          inherit bin x86cross aarch64cross;
+          inherit bin x86cross aarch64cross image;
           default = bin;
         };
         apps = rec {
@@ -84,6 +90,10 @@
           # instead of passing `buildInputs` / `nativeBuildInputs`,
           # we refer to an existing derivation here
           inputsFrom = [bin];
+          buildInputs = with pkgs; [
+            dive
+            docker
+          ];
         };
       }
     );
