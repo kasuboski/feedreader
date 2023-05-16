@@ -28,8 +28,13 @@ jobs:
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
       - name: Build Feedreader
+        if: matrix.target == 'aarch64' # seems like can't run the cross for native?
         run: |
           nix build .#${{ matrix.target }}cross
+      - name: Build Feedreader
+        if: matrix.target == 'x86'
+        run: |
+          nix build .
   # docker:
   #   runs-on: ubuntu-latest
   #   steps:
