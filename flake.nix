@@ -32,16 +32,17 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-        bin = pkgs.callPackage ./cross.nix {
+        build = pkgs.callPackage ./cross.nix {
           inherit nixpkgs crane flake-utils rust-overlay;
         };
+        bin = build.packages.${system}.default;
         x86cross =
-          bin
+          build
           .packages
           .x86_64-linux
           .bin;
         aarch64cross =
-          bin
+          build
           .packages
           .aarch64-linux
           .bin;
