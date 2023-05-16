@@ -32,20 +32,14 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-        build = pkgs.callPackage ./cross.nix {
+        build = pkgs.callPackage ./default.nix {
           inherit nixpkgs crane flake-utils rust-overlay;
         };
+        crossArchs = builtins.map (arch: {
+          name = "${arch}-cross";
+          value = build.packages.${arch}.bin;
+        }) ["x86_64-linux" "aarch64-linux"];
         bin = build.packages.${system}.default;
-        x86cross =
-          build
-          .packages
-          .x86_64-linux
-          .bin;
-        aarch64cross =
-          build
-          .packages
-          .aarch64-linux
-          .bin;
         image = pkgs.dockerTools.streamLayeredImage {
           name = "feedreader";
           contents = [pkgs.sqlite];
@@ -54,13 +48,16 @@
           };
         };
       in {
+        build = crossArchs;
         formatter = pkgs.alejandra;
-        packages = {
-          # that way we can build `bin` specifically,
-          # but it's also the default.
-          inherit bin x86cross aarch64cross image;
-          default = bin;
-        };
+        packages =
+          {
+            # that way we can build `bin` specifically,
+            # but it's also the default.
+            inherit bin image;
+            default = bin;
+          }
+          // builtins.listToAttrs crossArchs;
         apps = rec {
           default = feedreader;
           feedreader = flake-utils.lib.mkApp {drv = self.packages.${system}.default;};
