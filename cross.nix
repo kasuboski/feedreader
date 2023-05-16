@@ -4,11 +4,10 @@
   flake-utils,
   rust-overlay,
   system,
-  crossSystem,
 }:
 flake-utils.lib.eachDefaultSystem
 (
-  system: let
+  crossSystem: let
     crossBuild = crossSystem != system;
     overlays = [(import rust-overlay)];
     pkgs = import nixpkgs {
@@ -42,14 +41,17 @@ flake-utils.lib.eachDefaultSystem
       inherit src buildInputs nativeBuildInputs;
     };
     crossArgs = {
-      depsBuildBuild = [ pkgs.qemu ];
+      depsBuildBuild = [pkgs.qemu];
       cargoExtraArgs = "--target ${archInfo.${crossSystem}.rustTarget}";
       "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_LINKER" = "${pkgs.stdenv.cc.targetPrefix}cc";
       "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_RUNNER" = "qemu-${archInfo.${crossSystem}.qemu}";
       HOST_CC = "${pkgs.stdenv.cc.nativePrefix}cc";
       TARGET_CC = "${pkgs.stdenv.cc.targetPrefix}cc";
     };
-    commonArgs = if crossBuild then baseArgs // crossArgs else baseArgs;
+    commonArgs =
+      if crossBuild
+      then baseArgs // crossArgs
+      else baseArgs;
     cargoArtifacts = craneLib.buildDepsOnly commonArgs;
     bin = craneLib.buildPackage (commonArgs
       // {

@@ -32,47 +32,24 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-        rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-        # this is how we can tell crane to use our toolchain!
-        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
-        additionalFilter = path: _type: builtins.match ".*html$|.*opml$" path != null;
-        # https://crane.dev/API.html#cranelibfiltercargosources
-        src = nixpkgs.lib.cleanSourceWith {
-          src = craneLib.path ./.;
-          filter = path: type: (additionalFilter path type) || (craneLib.filterCargoSources path type);
+        bin = pkgs.callPackage ./cross.nix {
+          inherit nixpkgs crane flake-utils rust-overlay;
         };
-        nativeBuildInputs = with pkgs; [rustToolchain pkg-config];
-        buildInputs = with pkgs; [openssl sqlite];
-        # because we'll use it for both `cargoArtifacts` and `bin`
-        commonArgs = {
-          inherit src buildInputs nativeBuildInputs;
-        };
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-        bin = craneLib.buildPackage (commonArgs
-          // {
-            inherit cargoArtifacts;
-          });
         x86cross =
-          (pkgs.callPackage ./cross.nix {
-            inherit nixpkgs crane flake-utils rust-overlay;
-            crossSystem = "x86_64-linux";
-          })
+          bin
           .packages
-          .${system}
+          .x86_64-linux
           .bin;
         aarch64cross =
-          (pkgs.callPackage ./cross.nix {
-            inherit nixpkgs crane flake-utils rust-overlay;
-            crossSystem = "aarch64-linux";
-          })
+          bin
           .packages
-          .${system}
+          .aarch64-linux
           .bin;
         image = pkgs.dockerTools.streamLayeredImage {
           name = "feedreader";
           contents = [pkgs.sqlite];
           config = {
-            Cmd = [ "${bin}/bin/feedreader" ];
+            Cmd = ["${bin}/bin/feedreader"];
           };
         };
       in {
