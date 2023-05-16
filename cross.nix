@@ -33,8 +33,8 @@
         commonArgs = {
           inherit src buildInputs nativeBuildInputs;
           cargoExtraArgs = "--target ${archInfo.${crossSystem}.rustTarget}";
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "${pkgs.stdenv.cc.targetPrefix}cc";
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER = "qemu-${archInfo.${crossSystem}.qemu}";
+          "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_LINKER" = "${pkgs.stdenv.cc.targetPrefix}cc";
+          "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_RUNNER" = "qemu-${archInfo.${crossSystem}.qemu}";
           HOST_CC = "${pkgs.stdenv.cc.nativePrefix}cc";
           TARGET_CC = "${pkgs.stdenv.cc.targetPrefix}cc"; 
         };
