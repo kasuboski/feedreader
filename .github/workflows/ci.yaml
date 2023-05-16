@@ -30,7 +30,7 @@ jobs:
       - name: Build Feedreader
         if: matrix.target == 'aarch64' # seems like can't run the cross for native?
         run: |
-          nix build .#${{ matrix.target }}cross
+          nix build .#${{ matrix.target }}-linux-cross
       - name: Build Feedreader
         if: matrix.target == 'x86'
         run: |
