@@ -24,7 +24,7 @@
     flake-utils,
     rust-overlay,
     crane,
-  }:
+  }@inputs:
     flake-utils.lib.eachDefaultSystem
     (
       system: let
@@ -41,7 +41,29 @@
           src = craneLib.path ./.;
           filter = path: type: (additionalFilter path type) || (craneLib.filterCargoSources path type);
         };
-        # as before
+        # buildCross = crossSystem: let
+        #   crossPkgs = import nixpkgs {
+        #     inherit crossSystem;
+        #     localSystem = system;
+        #     inherit overlays;
+        #   };
+        #   commonCross =
+        #     commonArgs
+        #     // {
+        #       cargoExtraArgs = "--target x86_64-unknown-linux-gnu";
+        #       CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "${crossPkgs.stdenv.cc.targetPrefix}cc";
+        #       CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER = "qemu-x86_64";
+        #       HOST_CC = "${crossPkgs.stdenv.cc.nativePrefix}cc";
+        #       TARGET_CC = "${crossPkgs.stdenv.cc.targetPrefix}cc";
+        #     };
+        # in {
+        #   cargoArtifacts = craneLib.buildDepsOnly commonCross;
+
+        #   bin = craneLib.buildPackage (commonCross
+        #     // {
+        #       inherit cargoArtifacts;
+        #     });
+        # };
         nativeBuildInputs = with pkgs; [rustToolchain pkg-config];
         buildInputs = with pkgs; [openssl sqlite];
         # because we'll use it for both `cargoArtifacts` and `bin`
@@ -60,6 +82,14 @@
           # but it's also the default.
           inherit bin;
           default = bin;
+          x86cross = (pkgs.callPackage ./cross.nix {
+            inherit nixpkgs crane flake-utils rust-overlay;
+            crossSystem = "x86_64-linux";
+          }).packages.${system}.bin;
+          aarch64cross = (pkgs.callPackage ./cross.nix {
+            inherit nixpkgs crane flake-utils rust-overlay;
+            crossSystem = "aarch64-linux";
+          }).packages.${system}.bin;
         };
         apps = rec {
           default = feedreader;
