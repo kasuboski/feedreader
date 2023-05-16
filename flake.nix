@@ -70,6 +70,7 @@
           .bin;
         image = pkgs.dockerTools.streamLayeredImage {
           name = "feedreader";
+          contents = [pkgs.sqlite];
           config = {
             Cmd = [ "${bin}/bin/feedreader" ];
           };
