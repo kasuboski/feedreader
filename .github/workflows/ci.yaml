@@ -28,7 +28,7 @@ jobs:
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
       - name: Build Feedreader
         run: |
-          nix build .#${matrix.target}cross
+          nix build .#${{ matrix.target }}cross
   # docker:
   #   runs-on: ubuntu-latest
   #   steps:
