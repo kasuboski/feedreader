@@ -39,6 +39,7 @@ flake-utils.lib.eachDefaultSystem
     };
     commonArgs = {
       inherit src buildInputs nativeBuildInputs;
+      depsBuildBuild = [ pkgs.qemu ];
       cargoExtraArgs = "--target ${archInfo.${crossSystem}.rustTarget}";
       "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_LINKER" = "${pkgs.stdenv.cc.targetPrefix}cc";
       "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_RUNNER" = "qemu-${archInfo.${crossSystem}.qemu}";
