@@ -32,7 +32,7 @@ jobs:
       - name: Build Feedreader
         if: matrix.target == 'aarch64'
         run: |
-          nix build .#${{ matrix.target }}-linux-cross
+          nix build .#${{ matrix.target }}-linux-bin
           nix build .#image-${{ matrix.target }}-linux && ./result | docker load
           docker image ls
       - name: Build Feedreader

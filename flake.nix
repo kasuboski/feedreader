@@ -36,7 +36,7 @@
           inherit nixpkgs crane flake-utils rust-overlay;
         };
         crossArchs = builtins.listToAttrs (builtins.map (arch: {
-          name = "${arch}-cross";
+          name = "${arch}-bin";
           value = build.packages.${arch}.bin;
         }) ["x86_64-linux" "aarch64-linux"]);
         name = "feedreader";
