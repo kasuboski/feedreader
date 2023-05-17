@@ -35,20 +35,35 @@
         build = pkgs.callPackage ./default.nix {
           inherit nixpkgs crane flake-utils rust-overlay;
         };
-        crossArchs = builtins.map (arch: {
+        crossArchs = builtins.listToAttrs (builtins.map (arch: {
           name = "${arch}-cross";
           value = build.packages.${arch}.bin;
-        }) ["x86_64-linux" "aarch64-linux"];
+        }) ["x86_64-linux" "aarch64-linux"]);
+        name = "feedreader";
         bin = build.packages.${system}.default;
+        buildImage = arch: {
+          dockerTools,
+          callPackage,
+          cmd,
+        }:
+          dockerTools.streamLayeredImage {
+            inherit name;
+            tag = "build-${arch}";
+            contents = [pkgs.sqlite];
+            config = {Cmd = [(callPackage cmd {})];};
+          };
+        images = builtins.listToAttrs (builtins.map (arch: {
+          name = "image-${arch}";
+          value = pkgs.callPackage (buildImage arch) {cmd = "crossArchs.${arch}-linux";};
+        }) ["x86_64-linux" "aarch64-linux"]);
         image = pkgs.dockerTools.streamLayeredImage {
-          name = "feedreader";
+          inherit name;
           contents = [pkgs.sqlite];
           config = {
             Cmd = ["${bin}/bin/feedreader"];
           };
         };
       in {
-        build = crossArchs;
         formatter = pkgs.alejandra;
         packages =
           {
@@ -57,7 +72,8 @@
             inherit bin image;
             default = bin;
           }
-          // builtins.listToAttrs crossArchs;
+          // crossArchs
+          // images;
         apps = rec {
           default = feedreader;
           feedreader = flake-utils.lib.mkApp {drv = self.packages.${system}.default;};

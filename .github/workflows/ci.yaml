@@ -27,14 +27,19 @@ jobs:
           # Mostly to avoid GitHub rate limiting
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+      - uses: cachix/cachix-action@v12
+        with:
+          name: kasuboski-feedreader 
       - name: Build Feedreader
-        if: matrix.target == 'aarch64' # seems like can't run the cross for native?
+        if: matrix.target == 'aarch64'
         run: |
           nix build .#${{ matrix.target }}-linux-cross
+          nix build .#image-${{ matrix.target }}-linux
       - name: Build Feedreader
         if: matrix.target == 'x86'
         run: |
           nix build .
+          nix build .#image
   # docker:
   #   runs-on: ubuntu-latest
   #   steps:
