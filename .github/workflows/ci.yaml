@@ -33,12 +33,14 @@ jobs:
         if: matrix.target == 'aarch64'
         run: |
           nix build .#${{ matrix.target }}-linux-cross
-          nix build .#image-${{ matrix.target }}-linux
+          nix build .#image-${{ matrix.target }}-linux && ./result | docker load
+          docker image ls
       - name: Build Feedreader
         if: matrix.target == 'x86'
         run: |
           nix build .
-          nix build .#image
+          nix build .#image && ./result | docker load
+          docker image ls
   # docker:
   #   runs-on: ubuntu-latest
   #   steps:
