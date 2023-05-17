@@ -43,7 +43,6 @@
         bin = build.packages.${system}.default;
         buildImage = arch: {
           dockerTools,
-          callPackage,
           cmd,
         }:
           dockerTools.streamLayeredImage {
@@ -52,9 +51,11 @@
             contents = [pkgs.sqlite];
             config = {Cmd = [cmd];};
           };
-        images = builtins.listToAttrs (builtins.map (arch: let lookup = "${arch}-cross"; in {
+        images = builtins.listToAttrs (builtins.map (arch: let
+          lookup = "${arch}-cross";
+        in {
           name = "image-${arch}";
-          value = pkgs.callPackage (buildImage arch) {cmd = crossArchs.${lookup};};
+          value = pkgs.callPackage (buildImage arch) {cmd = "${crossArchs.${lookup}}/bin/feedreader";};
         }) ["x86_64-linux" "aarch64-linux"]);
         image = pkgs.dockerTools.streamLayeredImage {
           inherit name;
