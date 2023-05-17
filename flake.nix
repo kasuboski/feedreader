@@ -50,11 +50,11 @@
             inherit name;
             tag = "build-${arch}";
             contents = [pkgs.sqlite];
-            config = {Cmd = [(callPackage cmd {})];};
+            config = {Cmd = [cmd];};
           };
-        images = builtins.listToAttrs (builtins.map (arch: {
+        images = builtins.listToAttrs (builtins.map (arch: let lookup = "${arch}-cross"; in {
           name = "image-${arch}";
-          value = pkgs.callPackage (buildImage arch) {cmd = "crossArchs.${arch}-linux";};
+          value = pkgs.callPackage (buildImage arch) {cmd = crossArchs.${lookup};};
         }) ["x86_64-linux" "aarch64-linux"]);
         image = pkgs.dockerTools.streamLayeredImage {
           inherit name;
