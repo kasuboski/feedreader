@@ -1,5 +1,6 @@
 {
   nixpkgs,
+  lib,
   crane,
   flake-utils,
   rust-overlay,
@@ -10,11 +11,17 @@ flake-utils.lib.eachDefaultSystem
   crossSystem: let
     crossBuild = crossSystem != system;
     overlays = [(import rust-overlay)];
-    pkgs = import nixpkgs {
+    arch = builtins.elemAt (lib.splitString "-" crossSystem) 0;
+    platform = builtins.elemAt (lib.splitString "-" crossSystem) 1;
+    target =
+      if platform == "linux"
+      then "${arch}-unknown-linux-musl"
+      else crossSystem;
+    pkgs = (import nixpkgs {
       inherit crossSystem;
       localSystem = system;
       inherit overlays;
-    };
+    }).pkgsMusl;
     rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
     # this is how we can tell crane to use our toolchain!
     craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
@@ -29,23 +36,22 @@ flake-utils.lib.eachDefaultSystem
     # because we'll use it for both `cargoArtifacts` and `bin`
     archInfo = {
       x86_64-linux = {
-        rustTarget = "x86_64-unknown-linux-gnu";
         qemu = "x86_64";
       };
       aarch64-linux = {
-        rustTarget = "aarch64-unknown-linux-gnu";
         qemu = "aarch64";
       };
     };
     baseArgs = {
       inherit src buildInputs nativeBuildInputs;
+      cargoExtraArgs = "--target ${target}";
     };
     crossArgs = {
       doCheck = false;
       depsBuildBuild = [pkgs.qemu];
-      cargoExtraArgs = "--target ${archInfo.${crossSystem}.rustTarget}";
-      "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_LINKER" = "${pkgs.stdenv.cc.targetPrefix}cc";
-      "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_RUNNER" = "qemu-${archInfo.${crossSystem}.qemu}";
+      # cargoExtraArgs = "--target ${archInfo.${crossSystem}.rustTarget}";
+      "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_MUSL_LINKER" = "${pkgs.stdenv.cc.targetPrefix}cc";
+      "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_MUSL_RUNNER" = "qemu-${archInfo.${crossSystem}.qemu}";
       HOST_CC = "${pkgs.stdenv.cc.nativePrefix}cc";
       TARGET_CC = "${pkgs.stdenv.cc.targetPrefix}cc";
     };
