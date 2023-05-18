@@ -81,7 +81,7 @@
             '';
           };
         pushImage = pushImageFunc image;
-        craneImageNames = builtins.map (arch: ''-m "${repo}:$(''${CI_SHORT_SHA:-${baseTag}})-${arch}"'') supportedArches;
+        craneImageNames = builtins.map (arch: ''-m "${repo}:''${CI_SHORT_SHA:-${baseTag}}-${arch}"'') supportedArches;
         combineImages = pkgs.writeShellApplication {
           name = "combine-images";
 
@@ -112,6 +112,9 @@
           # we refer to an existing derivation here
           inputsFrom = [bin];
           buildInputs = with pkgs; [
+            just
+
+            #image stuff
             pkgs.crane
             dive
             docker
