@@ -35,10 +35,12 @@
         build = pkgs.callPackage ./default.nix {
           inherit nixpkgs crane flake-utils rust-overlay;
         };
+        supportedArches = ["x86_64-linux" "aarch64-linux"];
         crossArchs = builtins.listToAttrs (builtins.map (arch: {
-          name = "${arch}-bin";
-          value = build.packages.${arch}.bin;
-        }) ["x86_64-linux" "aarch64-linux"]);
+            name = "${arch}-bin";
+            value = build.packages.${arch}.bin;
+          })
+          supportedArches);
         name = "feedreader";
         bin = build.packages.${system}.default;
         buildImage = arch: {
@@ -52,11 +54,12 @@
             config = {Cmd = [cmd];};
           };
         images = builtins.listToAttrs (builtins.map (arch: let
-          lookup = "${arch}-cross";
-        in {
-          name = "image-${arch}";
-          value = pkgs.callPackage (buildImage arch) {cmd = "${crossArchs.${lookup}}/bin/feedreader";};
-        }) ["x86_64-linux" "aarch64-linux"]);
+            lookup = "${arch}-cross";
+          in {
+            name = "image-${arch}";
+            value = pkgs.callPackage (buildImage arch) {cmd = "${crossArchs.${lookup}}/bin/feedreader";};
+          })
+          supportedArches);
         image = pkgs.dockerTools.streamLayeredImage {
           inherit name;
           contents = [pkgs.sqlite];
@@ -64,13 +67,38 @@
             Cmd = ["${bin}/bin/feedreader"];
           };
         };
+        repo = "ghcr.io/kasuboski/feedreader";
+        baseTag = "nix";
+        pushImageFunc = image:
+          pkgs.writeShellApplication {
+            name = "push-image";
+
+            runtimeInputs = [pkgs.skopeo];
+
+            text = ''
+              BASE_TAG=''${CI_SHORT_SHA:="${baseTag}"}
+              ${image} | skopeo copy docker-archive:///dev/stdin "docker://${repo}:$BASE_TAG-${system}"
+            '';
+          };
+        pushImage = pushImageFunc image;
+        craneImageNames = builtins.map (arch: ''-m "${repo}:$(''${CI_SHORT_SHA:-${baseTag}})-${arch}"'') supportedArches;
+        combineImages = pkgs.writeShellApplication {
+          name = "combine-images";
+
+          runtimeInputs = [pkgs.crane];
+
+          text = ''
+            TAG=''${CI_SHORT_SHA:="${baseTag}"}
+            crane index append -t "${repo}:$TAG" ${builtins.concatStringsSep " " craneImageNames}
+          '';
+        };
       in {
         formatter = pkgs.alejandra;
         packages =
           {
             # that way we can build `bin` specifically,
             # but it's also the default.
-            inherit bin image;
+            inherit bin image pushImage combineImages;
             default = bin;
           }
           // crossArchs
@@ -84,9 +112,10 @@
           # we refer to an existing derivation here
           inputsFrom = [bin];
           buildInputs = with pkgs; [
-            pkgs.crane 
+            pkgs.crane
             dive
             docker
+            skopeo
           ];
         };
       }
