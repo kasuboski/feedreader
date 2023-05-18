@@ -84,6 +84,7 @@
           # we refer to an existing derivation here
           inputsFrom = [bin];
           buildInputs = with pkgs; [
+            pkgs.crane 
             dive
             docker
           ];
