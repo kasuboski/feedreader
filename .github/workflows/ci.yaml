@@ -29,6 +29,13 @@ jobs:
         with:
           name: kasuboski-feedreader 
           extraPullNames: nix-community
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build Feedreader
         if: matrix.target == 'aarch64'
         run: |
@@ -56,6 +63,13 @@ jobs:
         with:
           name: kasuboski-feedreader 
           extraPullNames: nix-community
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Combine and Push images
         run: |
           nix develop --command just multiarch-push  
