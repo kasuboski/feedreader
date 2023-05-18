@@ -54,7 +54,7 @@
             config = {Cmd = [cmd];};
           };
         images = builtins.listToAttrs (builtins.map (arch: let
-            lookup = "${arch}-cross";
+            lookup = "${arch}-bin";
           in {
             name = "image-${arch}";
             value = pkgs.callPackage (buildImage arch) {cmd = "${crossArchs.${lookup}}/bin/feedreader";};
@@ -81,6 +81,13 @@
             '';
           };
         pushImage = pushImageFunc image;
+        pushImages = builtins.listToAttrs (builtins.map (arch: let
+            lookup = "image-${arch}";
+          in {
+            name = "pushImage-${arch}";
+            value = pushImageFunc images.${lookup};
+          })
+          supportedArches);
         craneImageNames = builtins.map (arch: ''-m "${repo}:''${CI_SHORT_SHA:-${baseTag}}-${arch}"'') supportedArches;
         combineImages = pkgs.writeShellApplication {
           name = "combine-images";
@@ -102,7 +109,8 @@
             default = bin;
           }
           // crossArchs
-          // images;
+          // images
+          // pushImages;
         apps = rec {
           default = feedreader;
           feedreader = flake-utils.lib.mkApp {drv = self.packages.${system}.default;};
@@ -114,7 +122,10 @@
           buildInputs = with pkgs; [
             just
 
-            #image stuff
+            # github actions
+            actionlint
+
+            # image stuff
             pkgs.crane
             dive
             docker
