@@ -15,7 +15,7 @@ jobs:
   nix:
     strategy:
       matrix:
-        target: ["aarch64", "x86"]
+        target: ["aarch64", "x86_64"]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -37,17 +37,17 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build Feedreader
-        if: matrix.target == 'aarch64'
+        # if: matrix.target == 'aarch64'
         run: |
           nix build .#${{ matrix.target }}-linux-bin
           nix build .#pushImage-${{ matrix.target }}-linux && ./result/bin/push-image 
           nix develop --command just list-images
-      - name: Build Feedreader
-        if: matrix.target == 'x86'
-        run: |
-          nix build .
-          nix build .#pushImage && ./result/bin/push-image 
-          nix develop --command just list-images
+      # - name: Build Feedreader
+      #   if: matrix.target == 'x86_64'
+      #   run: |
+      #     nix build .
+      #     nix build .#pushImage && ./result/bin/push-image 
+      #     nix develop --command just list-images
   multi-push:
     runs-on: ubuntu-latest
     needs: nix

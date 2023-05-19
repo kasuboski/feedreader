@@ -77,7 +77,7 @@
 
             text = ''
               BASE_TAG=''${CI_SHORT_SHA:="${baseTag}"}
-              ${image} | skopeo copy docker-archive:///dev/stdin "docker://${repo}:$BASE_TAG-${system}"
+              ${image} | skopeo --insecure-policy copy docker-archive:///dev/stdin "docker://${repo}:$BASE_TAG-${system}"
             '';
           };
         pushImage = pushImageFunc image;
@@ -123,6 +123,7 @@
             just
 
             # github actions
+            act
             actionlint
 
             # image stuff
