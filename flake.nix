@@ -119,7 +119,7 @@
           # instead of passing `buildInputs` / `nativeBuildInputs`,
           # we refer to an existing derivation here
           inputsFrom = [bin];
-          buildInputs = with pkgs; [
+          packages = with pkgs; [
             just
 
             # github actions
