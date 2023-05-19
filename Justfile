@@ -23,3 +23,6 @@ cache-nix:
 
     nix develop --profile dev-profile --command 'true' # to preload or something :shrug:
     cachix push kasuboski-feedreader dev-profile
+
+local-workflow:
+    act -s GITHUB_TOKEN="{{ env_var('GITHUB_TOKEN') }}"
