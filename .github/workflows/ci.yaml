@@ -21,10 +21,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - run: echo "CI_SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      - name: Tailscale
+        timeout-minutes: 10 # the action will just try connecting forever
+        uses: tailscale/github-action@v1
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v2
         with:
           github-token: ${{ github.token }}
+          extra-conf: |
+            builders = josh@fettig x86_64-linux,aarch64-linux - 12 2 kvm,benchmark,big-parallel
+            builders-use-substitutes = true
       - uses: cachix/cachix-action@v12
         with:
           name: kasuboski-feedreader 
