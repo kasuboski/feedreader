@@ -77,7 +77,7 @@
 
             text = ''
               BASE_TAG=''${CI_SHORT_SHA:="${baseTag}"}
-              ${image} | skopeo --insecure-policy copy docker-archive:///dev/stdin "docker://${repo}:$BASE_TAG-${system}"
+              ${image} | skopeo --insecure-policy copy docker-archive:///dev/stdin "docker://${repo}:$BASE_TAG-${pkgs.lib.strings.removePrefix "build-" image.imageTag}"
             '';
           };
         pushImage = pushImageFunc image;
