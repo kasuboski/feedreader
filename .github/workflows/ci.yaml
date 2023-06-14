@@ -47,7 +47,7 @@ jobs:
       - name: Build Feedreader
         # if: matrix.target == 'aarch64'
         run: |
-          nix build .#${{ matrix.target }}-linux-bin
+          nix build --max-jobs 0 .#${{ matrix.target }}-linux-bin
           nix build .#pushImage-${{ matrix.target }}-linux && ./result/bin/push-image 
           nix develop --command just list-images
       # - name: Build Feedreader
