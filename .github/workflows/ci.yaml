@@ -27,7 +27,7 @@ jobs:
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v2
+        uses: DeterminateSystems/nix-installer-action@v4
         with:
           github-token: ${{ github.token }}
           extra-conf: |
@@ -47,6 +47,7 @@ jobs:
       - name: Build Feedreader
         # if: matrix.target == 'aarch64'
         run: |
+          cat /etc/nix/nix.conf
           nix build -vvv --max-jobs 0 .#${{ matrix.target }}-linux-bin
           nix build .#pushImage-${{ matrix.target }}-linux && ./result/bin/push-image 
           nix develop --command just list-images
