@@ -1,4 +1,6 @@
 {
+  nixConfig.extra-substituers = ["https://kasuboski-feedreader.cachix.org"];
+  nixConfig.extra-trusted-public-keys = ["kasuboski-feedreader.cachix.org-1:3wVuiH3ORfbrJrfU0uk8p/71wrPvYwpILEfxIEIJgoU="];
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
