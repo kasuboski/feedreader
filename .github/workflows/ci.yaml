@@ -7,89 +7,160 @@ on:
     - 'templates/**'
     - 'Cargo.*'
     - 'Dockerfile'
+    - '**/*.nix'
     - '.github/workflows/ci.yaml'
+  workflow_dispatch: {}
 
 jobs:
-  docker:
+  nix:
+    strategy:
+      matrix:
+        target: ["aarch64", "x86_64"]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v3
-        with:
-          # list of Docker images to use as base name for tags
-          images: |
-            ghcr.io/kasuboski/feedreader
-          # generate Docker tags based on the following events/attributes
-          tags: |
-            type=schedule
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-
+        uses: actions/checkout@v3
+      - run: echo "CI_SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Tailscale
         timeout-minutes: 10 # the action will just try connecting forever
         uses: tailscale/github-action@v1
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
-
-      # get a specific version for the remote buildx driver
-      - name: Set up Docker Buildx
-        id: builder
-        uses: docker/setup-buildx-action@v1
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v4
         with:
-          use: false
-
-      - name: Setup Actions buildkitd
-        shell: bash
-        run: |
-          # should probably still use certs...
-          # https://github.com/moby/buildkit#expose-buildkit-as-a-tcp-service
-          docker run -d --name buildkitd --privileged -p 1234:1234 moby/buildkit:buildx-stable-1 --addr tcp://0.0.0.0:1234
-          docker buildx create --name gh-builder --driver remote --use tcp://0.0.0.0:1234
-          docker buildx inspect --bootstrap
-
-      - name: Store certs
-        shell: bash
-        env:
-          CA_CERT: ${{ secrets.BUILDKIT_CA }}
-          CLIENT_CERT: ${{ secrets.BUILDKIT_CLIENT_CERT }}
-          CLIENT_KEY: ${{ secrets.BUILDKIT_CLIENT_KEY }}
-        run: |
-          echo "$CA_CERT" > ca_cert.pem
-          echo "$CLIENT_CERT" > client_cert.pem
-          echo "$CLIENT_KEY" > key.pem
-
-      - name: "Append ARM buildkit builder"
-        shell: bash
-        run: |
-          docker buildx create --append --name gh-builder \
-              --node arm \
-              --driver remote \
-              --driver-opt key="$GITHUB_WORKSPACE/key.pem" \
-              --driver-opt cert="$GITHUB_WORKSPACE/client_cert.pem" \
-              --driver-opt cacert="$GITHUB_WORKSPACE/ca_cert.pem" \
-              tcp://buildkitd:1234
-          docker buildx ls
-          docker buildx inspect --bootstrap
-
+          github-token: ${{ github.token }}
+          extra-conf: |
+            builders = "josh@fettig x86_64-linux,aarch64-linux - 12 2 kvm,benchmark,big-parallel,nixos-test"
+            builders-use-substitutes = true
+      - uses: cachix/cachix-action@v12
+        with:
+          name: kasuboski-feedreader 
+          extraPullNames: nix-community
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v2
+      - name: Build Feedreader
+        # if: matrix.target == 'aarch64'
+        run: |
+          nix build .#${{ matrix.target }}-linux-bin
+          nix build .#pushImage-${{ matrix.target }}-linux && ./result/bin/push-image 
+          nix develop --command just list-images
+      # - name: Build Feedreader
+      #   if: matrix.target == 'x86_64'
+      #   run: |
+      #     nix build .
+      #     nix build .#pushImage && ./result/bin/push-image 
+      #     nix develop --command just list-images
+  multi-push:
+    runs-on: ubuntu-latest
+    needs: nix
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - run: echo "CI_SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v2
         with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=ghcr.io/kasuboski/feedreader:buildcache
-          cache-to: type=registry,ref=ghcr.io/kasuboski/feedreader:buildcache,mode=max
+          github-token: ${{ github.token }}
+      - uses: cachix/cachix-action@v12
+        with:
+          name: kasuboski-feedreader 
+          extraPullNames: nix-community
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Combine and Push images
+        run: |
+          nix develop --command just multiarch-push  
+  # docker:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v2
+  #     - name: Docker meta
+  #       id: meta
+  #       uses: docker/metadata-action@v3
+  #       with:
+  #         # list of Docker images to use as base name for tags
+  #         images: |
+  #           ghcr.io/kasuboski/feedreader
+  #         # generate Docker tags based on the following events/attributes
+  #         tags: |
+  #           type=schedule
+  #           type=ref,event=branch
+  #           type=ref,event=pr
+  #           type=sha
+
+  #     - name: Tailscale
+  #       timeout-minutes: 10 # the action will just try connecting forever
+  #       uses: tailscale/github-action@v1
+  #       with:
+  #         authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+  #     # get a specific version for the remote buildx driver
+  #     - name: Set up Docker Buildx
+  #       id: builder
+  #       uses: docker/setup-buildx-action@v1
+  #       with:
+  #         use: false
+
+  #     - name: Setup Actions buildkitd
+  #       shell: bash
+  #       run: |
+  #         # should probably still use certs...
+  #         # https://github.com/moby/buildkit#expose-buildkit-as-a-tcp-service
+  #         docker run -d --name buildkitd --privileged -p 1234:1234 moby/buildkit:buildx-stable-1 --addr tcp://0.0.0.0:1234
+  #         docker buildx create --name gh-builder --driver remote --use tcp://0.0.0.0:1234
+  #         docker buildx inspect --bootstrap
+
+  #     - name: Store certs
+  #       shell: bash
+  #       env:
+  #         CA_CERT: ${{ secrets.BUILDKIT_CA }}
+  #         CLIENT_CERT: ${{ secrets.BUILDKIT_CLIENT_CERT }}
+  #         CLIENT_KEY: ${{ secrets.BUILDKIT_CLIENT_KEY }}
+  #       run: |
+  #         echo "$CA_CERT" > ca_cert.pem
+  #         echo "$CLIENT_CERT" > client_cert.pem
+  #         echo "$CLIENT_KEY" > key.pem
+
+  #     - name: "Append ARM buildkit builder"
+  #       shell: bash
+  #       run: |
+  #         docker buildx create --append --name gh-builder \
+  #             --node arm \
+  #             --driver remote \
+  #             --driver-opt key="$GITHUB_WORKSPACE/key.pem" \
+  #             --driver-opt cert="$GITHUB_WORKSPACE/client_cert.pem" \
+  #             --driver-opt cacert="$GITHUB_WORKSPACE/ca_cert.pem" \
+  #             tcp://buildkitd:1234
+  #         docker buildx ls
+  #         docker buildx inspect --bootstrap
+
+  #     - name: Login to GHCR
+  #       if: github.event_name != 'pull_request'
+  #       uses: docker/login-action@v1
+  #       with:
+  #         registry: ghcr.io
+  #         username: ${{ github.repository_owner }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
+
+  #     - name: Build and push
+  #       uses: docker/build-push-action@v2
+  #       with:
+  #         context: .
+  #         platforms: linux/amd64,linux/arm64
+  #         push: ${{ github.event_name != 'pull_request' }}
+  #         tags: ${{ steps.meta.outputs.tags }}
+  #         labels: ${{ steps.meta.outputs.labels }}
+  #         cache-from: type=registry,ref=ghcr.io/kasuboski/feedreader:buildcache
+  #         cache-to: type=registry,ref=ghcr.io/kasuboski/feedreader:buildcache,mode=max
