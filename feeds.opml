@@ -13,10 +13,6 @@
         <outline text="Austin">
             <outline title="Austin Monitor" text="Austin Monitor" xmlUrl="http://www.austinmonitor.com/feed/" htmlUrl="https://www.austinmonitor.com"></outline>
         </outline>
-        <outline text="Crypto">
-            <outline title="Not Boring by Packy McCormick" text="Not Boring by Packy McCormick" xmlUrl="https://www.notboring.co/feed" htmlUrl="https://www.notboring.co"></outline>
-            <outline title="Weekly Terra Report" text="Weekly Terra Report" xmlUrl="https://weeklyterrareport.substack.com/feed" htmlUrl="https://weeklyterrareport.substack.com"></outline>
-        </outline>
         <outline text="Tech">
             <outline title="duffney.io" text="duffney.io" xmlUrl="https://duffney.io/rss/" htmlUrl="https://duffney.io/"></outline>
             <outline title="Stay Caffeinated" text="Stay Caffeinated" xmlUrl="https://www.staycaffeinated.com/feed.xml" htmlUrl="https://staycaffeinated.com/"></outline>
