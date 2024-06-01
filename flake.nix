@@ -121,6 +121,7 @@
           inputsFrom = [bin];
           packages = with pkgs; [
             just
+            turso-cli
 
             # github actions
             act

@@ -11,6 +11,7 @@ use anyhow::anyhow;
 
 use askama_warp::Template;
 use chrono::{DateTime, Utc};
+use db::TursoCreds;
 use feed_rs::parser;
 use opml::OPML;
 use rweb::*;
@@ -242,7 +243,7 @@ fn reject_anyhow(err: anyhow::Error) -> Rejection {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     if env::var_os("RUST_LOG").is_none() {
         env::set_var("RUST_LOG", "feedreader=info");
     }
@@ -262,13 +263,19 @@ async fn main() {
             "Access-Control-Request-Headers",
         ])
         .allow_methods(vec!["GET", "HEAD", "POST", "DELETE"]);
+    let db = if let Some(creds) = TursoCreds::from_env() {
+        if let Ok(db_path) = env::var("FEED_DB_PATH") {
+            db::connect(db::ConnectionBacking::RemoteReplica(creds, db_path))
+        } else {
+            db::connect(db::ConnectionBacking::Remote(creds))
+        }
+    } else if let Ok(db_path) = env::var("FEED_DB_PATH") {
+        db::connect(db::ConnectionBacking::File(db_path))
+    } else {
+        anyhow::bail!("You must specify one of turso creds or db filepath")
+    };
 
-    let db_path = env::var("FEED_DB_PATH")
-        .or::<Result<String, env::VarError>>(Ok("./feeds.db".to_string()))
-        .expect("couldn't set db path");
-    let db: db::DB = db::connect(db::ConnectionBacking::File(&db_path))
-        .await
-        .expect("couldn't open db");
+    let db = db.await.expect("couldn't open db");
     db.init().await.expect("couldn't init db");
 
     if let Ok(f) = env::var("FEED_OPML_FILE") {
@@ -422,6 +429,7 @@ async fn main() {
         Box::pin(warp::serve(routes).run(([0, 0, 0, 0], 3030))),
     )
     .await;
+    Ok(())
 }
 
 #[get("/")]

@@ -1,5 +1,5 @@
+use std::env;
 use std::sync::Arc;
-use std::path::Path;
 
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -15,14 +15,40 @@ pub struct DB {
     db: Arc<libsql::Database>,
 }
 
-pub enum ConnectionBacking<'a> {
+pub enum ConnectionBacking {
     #[allow(dead_code)] // used in tests...
     Memory,
-    File(&'a dyn AsRef<Path>),
+    File(String),
+    Remote(TursoCreds),
+    RemoteReplica(TursoCreds, String),
 }
 
-pub async fn connect(conn_back: ConnectionBacking<'_>) -> Result<DB> {
+pub struct TursoCreds {
+    pub url: String,
+    pub token: String,
+}
+
+impl TursoCreds {
+    pub fn from_env() -> Option<Self> {
+        Some(Self {
+            url: env::var("TURSO_URL").ok()?,
+            token: env::var("TURSO_TOKEN").ok()?,
+        })
+    }
+}
+
+pub async fn connect(conn_back: ConnectionBacking) -> Result<DB> {
     let db = match conn_back {
+        ConnectionBacking::Remote(creds) => {
+            libsql::Builder::new_remote(creds.url, creds.token)
+                .build()
+                .await?
+        }
+        ConnectionBacking::RemoteReplica(creds, p) => {
+            libsql::Builder::new_remote_replica(p, creds.url, creds.token)
+                .build()
+                .await?
+        }
         ConnectionBacking::File(p) => libsql::Builder::new_local(p).build().await?,
         ConnectionBacking::Memory => libsql::Builder::new_local(":memory:").build().await?,
     };
@@ -66,8 +92,9 @@ impl From<String> for EntryFilter {
 
 impl DB {
     pub(crate) async fn init(&self) -> Result<()> {
-        self.conn.execute_batch(
-            r#"
+        self.conn
+            .execute_batch(
+                r#"
 CREATE TABLE IF NOT EXISTS feeds
 (
     id           TEXT PRIMARY KEY NOT NULL,
@@ -92,9 +119,9 @@ CREATE TABLE IF NOT EXISTS entries
     feed          TEXT
 );
                 "#,
-        )
-        .await
-        .context("couldn't init db")
+            )
+            .await
+            .context("couldn't init db")
     }
 
     pub(crate) async fn add_feeds<T>(&self, feeds: T) -> Result<()>
@@ -114,20 +141,22 @@ CREATE TABLE IF NOT EXISTS entries
                 .context("couldn't prepare statement")?;
 
             for f in feeds {
-                let _ = stmt.execute((
-                    f.id,
-                    f.name,
-                    f.site_url,
-                    f.feed_url,
-                    f.last_fetched,
-                    f.fetch_error,
-                    f.category
-                )).await?;
+                let _ = stmt
+                    .execute((
+                        f.id,
+                        f.name,
+                        f.site_url,
+                        f.feed_url,
+                        f.last_fetched,
+                        f.fetch_error,
+                        f.category,
+                    ))
+                    .await?;
                 stmt.reset();
             }
         }
         tx.commit().await?;
-        
+
         Ok(())
     }
 
@@ -154,10 +183,13 @@ CREATE TABLE IF NOT EXISTS entries
     }
 
     pub(crate) async fn update_feed_status(&self, id: String, error: Option<String>) -> Result<()> {
-        let mut stmt = self.conn.prepare(
-            "UPDATE feeds SET fetch_error = ?, last_fetched = ?
+        let mut stmt = self
+            .conn
+            .prepare(
+                "UPDATE feeds SET fetch_error = ?, last_fetched = ?
                 WHERE id = ?",
-        ).await?;
+            )
+            .await?;
 
         stmt.execute((error, UtcTime(Utc::now()), id)).await?;
 
@@ -175,17 +207,19 @@ CREATE TABLE IF NOT EXISTS entries
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 ).await?;
             for e in entries {
-                let _ = stmt.execute((
-                    e.id,
-                    e.title,
-                    e.content_link,
-                    e.comments_link,
-                    e.robust_link,
-                    e.published,
-                    e.read,
-                    e.starred,
-                    e.feed
-                )).await?;
+                let _ = stmt
+                    .execute((
+                        e.id,
+                        e.title,
+                        e.content_link,
+                        e.comments_link,
+                        e.robust_link,
+                        e.published,
+                        e.read,
+                        e.starred,
+                        e.feed,
+                    ))
+                    .await?;
                 stmt.reset();
             }
         }
@@ -210,7 +244,8 @@ CREATE TABLE IF NOT EXISTS entries
             EntryFilter::All => "",
         };
         let statement_string = format!("SELECT id, title, content_link, comments_link, robust_link, published, read, starred, feed FROM entries {} {}", where_clause, order_clause);
-        let mut stmt = self.conn
+        let mut stmt = self
+            .conn
             .prepare(&statement_string)
             .await
             .context("couldn't prepare statement")?;
@@ -241,7 +276,8 @@ CREATE TABLE IF NOT EXISTS entries
         ordering: Ordering,
     ) -> Result<Vec<Entry>> {
         {
-            let mut stmt = self.conn
+            let mut stmt = self
+                .conn
                 .prepare("UPDATE entries SET read = NOT read WHERE id = ?")
                 .await
                 .context("couldn't prepare statement")?;
@@ -257,7 +293,8 @@ CREATE TABLE IF NOT EXISTS entries
         ordering: Ordering,
     ) -> Result<Vec<Entry>> {
         {
-            let mut stmt = self.conn
+            let mut stmt = self
+                .conn
                 .prepare("UPDATE entries SET starred = NOT starred WHERE id = ?")
                 .await
                 .context("couldn't prepare statement")?;

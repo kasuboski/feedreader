@@ -1,4 +1,4 @@
 /target
-*.db
+*.db*
 result
 .direnv
