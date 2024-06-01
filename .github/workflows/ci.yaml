@@ -19,13 +19,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - run: echo "CI_SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Tailscale
         timeout-minutes: 10 # the action will just try connecting forever
-        uses: tailscale/github-action@v1
+        uses: tailscale/github-action@v2
         with:
-          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
+          tags: tag:gh-action
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v4
         with:
@@ -39,7 +41,7 @@ jobs:
           extraPullNames: nix-community
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -61,7 +63,7 @@ jobs:
     needs: nix
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - run: echo "CI_SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v2
@@ -73,7 +75,7 @@ jobs:
           extraPullNames: nix-community
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
