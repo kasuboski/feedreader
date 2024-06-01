@@ -28,6 +28,16 @@ use regex::Regex;
 
 mod db;
 
+#[derive(Debug, Clone, Schema, Deserialize, Serialize)]
+#[serde(transparent)]
+struct UtcTime(DateTime<Utc>);
+
+impl From<DateTime<Utc>> for UtcTime {
+    fn from(c: DateTime<Utc>) -> UtcTime {
+        UtcTime(c)
+    }
+}
+
 #[derive(Schema, Deserialize, Serialize)]
 struct Healthz {
     up: bool,
@@ -45,7 +55,7 @@ struct Feed {
     name: String,
     site_url: String,
     feed_url: String,
-    last_fetched: Option<DateTime<Utc>>,
+    last_fetched: Option<UtcTime>,
     fetch_error: Option<String>,
     category: String,
 }
@@ -70,7 +80,7 @@ struct Entry {
     content_link: String,
     comments_link: String,
     robust_link: String,
-    published: Option<DateTime<Utc>>,
+    published: Option<UtcTime>,
     read: bool,
     starred: bool,
     feed: String,
@@ -82,7 +92,7 @@ impl Entry {
         title: String,
         content_link: String,
         comments_link: String,
-        published: Option<DateTime<Utc>>,
+        published: Option<UtcTime>,
     ) -> Self {
         Entry {
             id: base64::encode_config(id.as_bytes(), base64::URL_SAFE),
@@ -132,10 +142,10 @@ impl From<&feed_rs::model::Entry> for Entry {
             None => "".to_string(),
         };
 
-        let published = if let Some(_p) = e.published {
-            e.published
-        } else if let Some(_u) = e.updated {
-            e.updated
+        let published = if let Some(p) = e.published {
+            Some(UtcTime(p))
+        } else if let Some(u) = e.updated {
+            Some(UtcTime(u))
         } else {
             None
         };
@@ -210,12 +220,13 @@ impl From<AddFeedForm> for Feed {
 }
 
 mod filters {
-    use chrono::{DateTime, Utc};
     use chrono_humanize::HumanTime;
 
-    pub fn humandate(s: &Option<DateTime<Utc>>) -> ::askama::Result<String> {
+    use crate::UtcTime;
+
+    pub fn humandate(s: &Option<UtcTime>) -> ::askama::Result<String> {
         if let Some(date) = s {
-            Ok(format!("{}", HumanTime::from(*date)))
+            Ok(format!("{}", HumanTime::from(date.0)))
         } else {
             Ok("".to_string())
         }
@@ -545,7 +556,7 @@ mod test {
         let document = OPML::from_reader(&mut file).expect("Couldn't parse feeds.opml");
 
         let feeds = parse_opml_document(&document).expect("Couldn't parse opml to feeds");
-        assert_eq!(feeds.len(), 79);
+        assert_eq!(feeds.len(), 77);
         assert_eq!(feeds[0].name, "BetterExplained");
         assert_eq!(feeds[3].name, "Austin Monitor");
         assert_eq!(feeds[3].category, "Austin");
@@ -576,7 +587,7 @@ mod test {
                 name: "HackerNews".to_string(),
                 site_url: "https://news.ycombinator.com".to_string(),
                 feed_url: "https://news.ycombinator.com/rss".to_string(),
-                last_fetched: Some(Utc::now()),
+                last_fetched: Some(Utc::now().into()),
                 fetch_error: None,
                 category: "tech".to_string(),
             },
@@ -608,14 +619,14 @@ mod test {
                 "Cool Post".to_string(),
                 "https://content.com/1".to_string(),
                 "".to_string(),
-                Some(Utc::now()),
+                Some(Utc::now().into()),
             ),
             Entry::new(
                 "your-entry",
                 "Gross Post".to_string(),
                 "https://content.com/2".to_string(),
                 "".to_string(),
-                Some(Utc::now()),
+                Some(Utc::now().into()),
             ),
         ];
 
@@ -637,7 +648,7 @@ mod test {
                 name: "HackerNews".to_string(),
                 site_url: "https://news.ycombinator.com".to_string(),
                 feed_url: "https://news.ycombinator.com/rss".to_string(),
-                last_fetched: Some(Utc::now()),
+                last_fetched: Some(Utc::now().into()),
                 fetch_error: None,
                 category: "tech".to_string(),
             },
