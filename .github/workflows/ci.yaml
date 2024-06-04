@@ -50,8 +50,8 @@ jobs:
         # if: matrix.target == 'aarch64'
         run: |
           nix build .#${{ matrix.target }}-linux-bin
-          nix build .#pushImage-${{ matrix.target }}-linux && ./result/bin/push-image 
-          nix develop --command just list-images
+          # nix build .#pushImage-${{ matrix.target }}-linux && ./result/bin/push-image 
+          # nix develop --command just list-images
       # - name: Build Feedreader
       #   if: matrix.target == 'x86_64'
       #   run: |
@@ -60,6 +60,7 @@ jobs:
       #     nix develop --command just list-images
   multi-push:
     runs-on: ubuntu-latest
+    if: ${{ false }}
     needs: nix
     steps:
       - name: Checkout

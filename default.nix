@@ -39,25 +39,35 @@ flake-utils.lib.eachDefaultSystem
     };
     baseArgs = {
       inherit src buildInputs nativeBuildInputs;
+      cargoExtraArgs = "";
     };
     crossArgs = {
       doCheck = false;
       depsBuildBuild = [pkgs.qemu];
       cargoExtraArgs = "--target ${archInfo.${crossSystem}.rustTarget}";
-      "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_LINKER" = "${pkgs.stdenv.cc.targetPrefix}cc";
-      "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_RUNNER" = "qemu-${archInfo.${crossSystem}.qemu}";
-      HOST_CC = "${pkgs.stdenv.cc.nativePrefix}cc";
-      TARGET_CC = "${pkgs.stdenv.cc.targetPrefix}cc";
     };
     commonArgs =
       if crossBuild
       then baseArgs // crossArgs
       else baseArgs;
-    cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-    bin = craneLib.buildPackage (commonArgs
-      // {
-        inherit cargoArtifacts;
-      });
+    crossVars = ''
+      export "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_LINKER"="${pkgs.stdenv.cc.targetPrefix}cc";
+      export "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_RUNNER"="qemu-${archInfo.${crossSystem}.qemu}";
+      export HOST_CC="${pkgs.stdenv.cc.nativePrefix}cc";
+      export CC="$HOST_CC";
+      export TARGET_CC="${pkgs.stdenv.cc.targetPrefix}cc";
+      export RUSTFLAGS="-C link-arg=-fuse-ld=lld"
+    '';
+    bin = pkgs.writeShellApplication {
+      name = "build-rust";
+      runtimeInputs = [rustToolchain pkgs.qemu pkgs.stdenv.cc];
+      text = ''
+        echo "Building for ${crossSystem}..."
+        ${pkgs.lib.optionalString crossBuild crossVars}
+
+        cargo build --release ${commonArgs.cargoExtraArgs};
+      '';
+    };
   in rec {
     packages = {
       # that way we can build `bin` specifically,
