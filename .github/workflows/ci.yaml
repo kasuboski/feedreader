@@ -50,6 +50,7 @@ jobs:
         # if: matrix.target == 'aarch64'
         run: |
           nix build .#${{ matrix.target }}-linux-bin
+          ./result/bin/build-rust
           # nix build .#pushImage-${{ matrix.target }}-linux && ./result/bin/push-image 
           # nix develop --command just list-images
       # - name: Build Feedreader
