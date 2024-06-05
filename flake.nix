@@ -54,19 +54,13 @@
             config = {Cmd = [cmd];};
           };
         images = builtins.listToAttrs (builtins.map (arch: let
-            lookup = "${arch}-bin";
+            target = "${pkgs.lib.strings.removeSuffix "-linux" arch}-unknown-linux-gnu";
           in {
             name = "image-${arch}";
-            value = pkgs.callPackage (buildImage arch) {cmd = "${crossArchs.${lookup}}/bin/feedreader";};
+            value = pkgs.callPackage (buildImage arch) {cmd = ./target/${target}/release/feedreader;};
           })
           supportedArches);
-        image = pkgs.dockerTools.streamLayeredImage {
-          inherit name;
-          contents = [pkgs.sqlite];
-          config = {
-            Cmd = ["${bin}/bin/feedreader"];
-          };
-        };
+        image = images."image-${system}";
         repo = "ghcr.io/kasuboski/feedreader";
         baseTag = "nix";
         pushImageFunc = image:
@@ -80,7 +74,7 @@
               ${image} | skopeo --insecure-policy copy docker-archive:///dev/stdin "docker://${repo}:$BASE_TAG-${pkgs.lib.strings.removePrefix "build-" image.imageTag}"
             '';
           };
-        pushImage = pushImageFunc image;
+        pushImage = pushImages."pushImage-${system}";
         pushImages = builtins.listToAttrs (builtins.map (arch: let
             lookup = "image-${arch}";
           in {

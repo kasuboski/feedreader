@@ -5,10 +5,10 @@ build:
     nix build .
 
 image:
-    nix build .#image
+    nix build path:.#image
 
 push-image:
-    nix build .#pushImage && ./result/bin/push-image
+    nix build path:.#pushImage && ./result/bin/push-image
 
 multiarch-push:
     nix build .#combineImages && ./result/bin/combine-images

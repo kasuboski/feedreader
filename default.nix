@@ -37,19 +37,7 @@ flake-utils.lib.eachDefaultSystem
         qemu = "aarch64";
       };
     };
-    baseArgs = {
-      inherit src buildInputs nativeBuildInputs;
-      cargoExtraArgs = "";
-    };
-    crossArgs = {
-      doCheck = false;
-      depsBuildBuild = [pkgs.qemu];
-      cargoExtraArgs = "--target ${archInfo.${crossSystem}.rustTarget}";
-    };
-    commonArgs =
-      if crossBuild
-      then baseArgs // crossArgs
-      else baseArgs;
+    cargoExtraArgs = "--target ${archInfo.${crossSystem}.rustTarget}";
     crossVars = ''
       export "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_LINKER"="${pkgs.stdenv.cc.targetPrefix}cc";
       export "CARGO_TARGET_${pkgs.lib.strings.toUpper archInfo.${crossSystem}.qemu}_UNKNOWN_LINUX_GNU_RUNNER"="qemu-${archInfo.${crossSystem}.qemu}";
@@ -65,7 +53,7 @@ flake-utils.lib.eachDefaultSystem
         echo "Building for ${crossSystem}..."
         ${pkgs.lib.optionalString crossBuild crossVars}
 
-        cargo build --release ${commonArgs.cargoExtraArgs};
+        cargo build --release ${cargoExtraArgs};
       '';
     };
   in rec {
