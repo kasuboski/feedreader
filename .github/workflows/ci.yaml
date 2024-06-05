@@ -35,7 +35,7 @@ jobs:
           extra-conf: |
             builders = "josh@fettig x86_64-linux,aarch64-linux - 12 2 kvm,benchmark,big-parallel,nixos-test"
             builders-use-substitutes = true
-      - uses: cachix/cachix-action@v12
+      - uses: cachix/cachix-action@v15
         with:
           name: kasuboski-feedreader 
           extraPullNames: nix-community
@@ -70,7 +70,7 @@ jobs:
         uses: DeterminateSystems/nix-installer-action@v2
         with:
           github-token: ${{ github.token }}
-      - uses: cachix/cachix-action@v12
+      - uses: cachix/cachix-action@v15
         with:
           name: kasuboski-feedreader 
           extraPullNames: nix-community
