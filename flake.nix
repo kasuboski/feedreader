@@ -113,10 +113,12 @@
           # instead of passing `buildInputs` / `nativeBuildInputs`,
           # we refer to an existing derivation here
           inputsFrom = [bin];
+          buildInputs = [] ++ pkgs.lib.optional pkgs.stdenv.isDarwin [pkgs.libiconv pkgs.darwin.apple_sdk.frameworks.Security];
           packages = with pkgs; [
             just
             turso-cli
             rustup
+            cargo-nextest
 
             # github actions
             act

@@ -24,7 +24,7 @@ flake-utils.lib.eachDefaultSystem
       src = craneLib.path ./.;
       filter = path: type: (additionalFilter path type) || (craneLib.filterCargoSources path type);
     };
-    nativeBuildInputs = with pkgs; [rustToolchain pkg-config];
+    nativeBuildInputs = with pkgs; [rustToolchain pkg-config] ++ pkgs.lib.optional pkgs.stdenv.isDarwin [pkgs.libiconv pkgs.darwin.apple_sdk.frameworks.Security];
     buildInputs = with pkgs; [openssl sqlite];
     # because we'll use it for both `cargoArtifacts` and `bin`
     archInfo = {
