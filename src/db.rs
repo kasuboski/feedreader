@@ -10,7 +10,8 @@ use super::{Entry, Feed};
 
 #[derive(Clone)]
 pub struct DB {
-    conn: libsql::Connection,
+    main_conn: libsql::Connection,
+    update_conn: libsql::Connection,
     #[allow(dead_code)] // someday
     db: Arc<libsql::Database>,
 }
@@ -52,9 +53,15 @@ pub async fn connect(conn_back: ConnectionBacking) -> Result<DB> {
         ConnectionBacking::File(p) => libsql::Builder::new_local(p).build().await?,
         ConnectionBacking::Memory => libsql::Builder::new_local(":memory:").build().await?,
     };
-    let conn = db.connect()?;
+    let main_conn = db.connect()?;
+    // update is always in memory for now
+    let update_conn = libsql::Builder::new_local(":memory:")
+        .build()
+        .await?
+        .connect()?;
     Ok(DB {
-        conn,
+        main_conn,
+        update_conn,
         db: db.into(),
     })
 }
@@ -92,7 +99,7 @@ impl From<String> for EntryFilter {
 
 impl DB {
     pub(crate) async fn init(&self) -> Result<()> {
-        self.conn
+        self.main_conn
             .execute_batch(
                 r#"
 CREATE TABLE IF NOT EXISTS feeds
@@ -101,8 +108,6 @@ CREATE TABLE IF NOT EXISTS feeds
     name         TEXT NOT NULL,
     site_url     TEXT NOT NULL,
     feed_url     TEXT NOT NULL,
-    last_fetched DATETIME,
-    fetch_error  TEXT,
     category     TEXT NOT NULL
 );
 
@@ -118,23 +123,38 @@ CREATE TABLE IF NOT EXISTS entries
     starred       BOOLEAN,
     feed          TEXT
 );
-                "#,
+"#,
             )
             .await
-            .context("couldn't init db")
+            .context("couldn't init db")?;
+        self.update_conn
+            .execute_batch(
+                r#"
+CREATE TABLE IF NOT EXISTS feed_updates
+(
+    id          INTEGER PRIMARY KEY NOT NULL,
+    feed        TEXT NOT NULL,
+    fetch_error TEXT,
+    created_at  DATETIME
+);
+"#,
+            )
+            .await
+            .context("couldn't init update db")?;
+        Ok(())
     }
 
     pub(crate) async fn add_feeds<T>(&self, feeds: T) -> Result<()>
     where
         T: Iterator<Item = Feed>,
     {
-        let tx = self.conn.transaction().await?;
+        let tx = self.main_conn.transaction().await?;
         {
             let mut stmt = tx
                 .prepare(
                     r#"
-    INSERT OR REPLACE INTO feeds (id, name, site_url, feed_url, last_fetched, fetch_error, category)
-    VALUES (?, ?, ?, ?, ?, ?, ?);
+    INSERT OR REPLACE INTO feeds (id, name, site_url, feed_url, category)
+    VALUES (?, ?, ?, ?, ?);
                     "#,
                 )
                 .await
@@ -142,15 +162,7 @@ CREATE TABLE IF NOT EXISTS entries
 
             for f in feeds {
                 let _ = stmt
-                    .execute((
-                        f.id,
-                        f.name,
-                        f.site_url,
-                        f.feed_url,
-                        f.last_fetched,
-                        f.fetch_error,
-                        f.category,
-                    ))
+                    .execute((f.id, f.name, f.site_url, f.feed_url, f.category))
                     .await?;
                 stmt.reset();
             }
@@ -161,9 +173,12 @@ CREATE TABLE IF NOT EXISTS entries
     }
 
     pub(crate) async fn get_feeds(&self) -> Result<Vec<Feed>> {
-        let mut stmt = self.conn.prepare("SELECT id, name, site_url, feed_url, last_fetched, fetch_error, category FROM feeds")
-        .await
-        .context("couldn't prepare statement")?;
+        // TODO: Probably still want update info
+        let mut stmt = self
+            .main_conn
+            .prepare("SELECT id, name, site_url, feed_url, category FROM feeds")
+            .await
+            .context("couldn't prepare statement")?;
         let mut rows = stmt.query(()).await?;
         let mut feeds: Vec<Feed> = vec![];
         // TODO: Use .into_stream
@@ -176,7 +191,10 @@ CREATE TABLE IF NOT EXISTS entries
     }
 
     pub(crate) async fn remove_feed(&self, id: String) -> Result<()> {
-        let mut stmt = self.conn.prepare("DELETE FROM feeds WHERE id = ?").await?;
+        let mut stmt = self
+            .main_conn
+            .prepare("DELETE FROM feeds WHERE id = ?")
+            .await?;
         stmt.execute([id]).await?;
 
         Ok(())
@@ -184,14 +202,14 @@ CREATE TABLE IF NOT EXISTS entries
 
     pub(crate) async fn update_feed_status(&self, id: String, error: Option<String>) -> Result<()> {
         let mut stmt = self
-            .conn
+            .update_conn
             .prepare(
-                "UPDATE feeds SET fetch_error = ?, last_fetched = ?
-                WHERE id = ?",
+                "INSERT INTO feed_updates (feed, fetch_error, created_at)
+                      VALUES (?, ?, ?)",
             )
             .await?;
 
-        stmt.execute((error, UtcTime(Utc::now()), id)).await?;
+        stmt.execute((id, error, UtcTime(Utc::now()))).await?;
 
         Ok(())
     }
@@ -200,7 +218,7 @@ CREATE TABLE IF NOT EXISTS entries
     where
         T: Iterator<Item = Entry>,
     {
-        let tx = self.conn.transaction().await?;
+        let tx = self.main_conn.transaction().await?;
         {
             let mut stmt = tx.prepare(
                     "INSERT OR IGNORE INTO entries (id, title, content_link, comments_link, robust_link, published, read, starred, feed)
@@ -245,7 +263,7 @@ CREATE TABLE IF NOT EXISTS entries
         };
         let statement_string = format!("SELECT id, title, content_link, comments_link, robust_link, published, read, starred, feed FROM entries {} {}", where_clause, order_clause);
         let mut stmt = self
-            .conn
+            .main_conn
             .prepare(&statement_string)
             .await
             .context("couldn't prepare statement")?;
@@ -277,7 +295,7 @@ CREATE TABLE IF NOT EXISTS entries
     ) -> Result<Vec<Entry>> {
         {
             let mut stmt = self
-                .conn
+                .main_conn
                 .prepare("UPDATE entries SET read = NOT read WHERE id = ?")
                 .await
                 .context("couldn't prepare statement")?;
@@ -294,7 +312,7 @@ CREATE TABLE IF NOT EXISTS entries
     ) -> Result<Vec<Entry>> {
         {
             let mut stmt = self
-                .conn
+                .main_conn
                 .prepare("UPDATE entries SET starred = NOT starred WHERE id = ?")
                 .await
                 .context("couldn't prepare statement")?;
