@@ -2,16 +2,13 @@ default:
     @just --list --unsorted
 
 build:
-    nix build .
+    earthly --strict +build
 
 image:
-    nix build path:.#image
-
-push-image:
-    nix build path:.#pushImage && ./result/bin/push-image
+    earthly --strict --push +image
 
 multiarch-push:
-    nix build .#combineImages && ./result/bin/combine-images
+    combine-images
 
 list-images:
     nix develop --command skopeo list-tags docker://ghcr.io/kasuboski/feedreader
