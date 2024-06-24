@@ -24,7 +24,7 @@ lint:
 build:
   FROM +lint
   DO rust+CARGO --args="build --release" --output="release/[^/\.]+"
-  SAVE ARTIFACT ./target/release/* feedreader
+  SAVE ARTIFACT ./target/release/* feedreader AS LOCAL result/feedreader
 
 test:
   FROM +lint
@@ -32,8 +32,13 @@ test:
   DO rust+CARGO --args="test"
 
 image:
+  ARG EARTHLY_GIT_SHORT_HASH
+  ARG TAG=$EARTHLY_GIT_SHORT_HASH
+  ARG TARGETARCH
+  ARG TARGETOS
   FROM cgr.dev/chainguard/glibc-dynamic
-  COPY +build/feedreader feedreader
+  WORKDIR /feedreader
+  COPY +build/feedreader /app/feedreader
   EXPOSE 3030
-  CMD ["./feedreader"]
-  SAVE IMAGE--push ghcr.io/kasuboski/feedreader:latest
+  CMD ["/app/feedreader"]
+  SAVE IMAGE --push ghcr.io/kasuboski/feedreader:$TAG-$TARGETOS-$TARGETARCH
