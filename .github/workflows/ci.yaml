@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - run: echo "CI_SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      - run: echo "CI_SHORT_SHA=$(git rev-parse --short=8 HEAD)" >> $GITHUB_ENV
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v2
         with:
