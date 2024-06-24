@@ -97,7 +97,7 @@ impl Entry {
     ) -> Self {
         Entry {
             id: base64::encode_config(id.as_bytes(), base64::URL_SAFE),
-            title: title,
+            title,
             content_link,
             comments_link,
             published,
@@ -145,11 +145,7 @@ impl From<&feed_rs::model::Entry> for Entry {
 
         let published = if let Some(p) = e.published {
             Some(UtcTime(p))
-        } else if let Some(u) = e.updated {
-            Some(UtcTime(u))
-        } else {
-            None
-        };
+        } else { e.updated.map(UtcTime) };
 
         Entry::new(
             &e.id,
@@ -382,7 +378,7 @@ async fn main() -> anyhow::Result<()> {
                     .iter()
                     .map(|e| {
                         let mut o: Entry = e.into();
-                        o.feed = f.name.clone();
+                        o.feed.clone_from(&f.name);
                         o
                     })
                     .collect();
