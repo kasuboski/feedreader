@@ -39,6 +39,7 @@ jobs:
 
       - name: Build Feedreader
         env:
+          EARTHLY_ORG: kasuboski
           EARTHLY_TOKEN: ${{ secrets.EARTHLY_TOKEN }}
           EARTHLY_SATELLITE: ${{ matrix.target }}
         run: |
