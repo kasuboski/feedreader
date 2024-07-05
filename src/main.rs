@@ -9,12 +9,12 @@ use anyhow::anyhow;
 
 use askama_axum::Template;
 use axum::body::Body;
-use axum::extract::{Path, State};
+use axum::extract::{MatchedPath, Path, State};
 use axum::http::header::{
     ACCESS_CONTROL_REQUEST_HEADERS, ACCESS_CONTROL_REQUEST_METHOD, CONTENT_TYPE, ORIGIN, REFERER,
     USER_AGENT,
 };
-use axum::http::{HeaderMap, Method, Response, StatusCode};
+use axum::http::{HeaderMap, Method, Request, Response, StatusCode};
 use axum::response::{IntoResponse, Redirect};
 use axum::routing::{delete, get, post};
 use axum::{http, Form, Json, Router};
@@ -35,7 +35,8 @@ use http::header::{ACCEPT, AUTHORIZATION};
 use lazy_static::lazy_static;
 use regex::Regex;
 use tower_http::cors::{Any, CorsLayer};
-use tracing::{error, info};
+use tower_http::trace::TraceLayer;
+use tracing::{error, info, info_span};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -417,7 +418,6 @@ async fn main() -> anyhow::Result<()> {
             )
         });
 
-    // TODO: catch all error handler
     let app = Router::new()
         .route("/", get(index))
         .route("/history.html", get(history))
@@ -445,7 +445,23 @@ async fn main() -> anyhow::Result<()> {
                     ACCESS_CONTROL_REQUEST_METHOD,
                 ])
                 .allow_methods([Method::GET, Method::HEAD, Method::POST, Method::DELETE]),
-        );
+        )
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &Request<_>| {
+                    // Log the matched route's path (with placeholders not filled in).
+                    // Use request.uri() or OriginalUri if you want the real path.
+                    let matched_path = request
+                        .extensions()
+                        .get::<MatchedPath>()
+                        .map(MatchedPath::as_str);
+
+                    info_span!(
+                        "http_request",
+                        method = ?request.method(),
+                        matched_path
+                    )
+                }));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3030")
         .await
