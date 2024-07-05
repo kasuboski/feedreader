@@ -4,7 +4,7 @@
     <header>
       <hgroup>
         <h3 class="no-margin-bottom"><a href="{{ entry.content_link }}">{{ entry.title }}</a></h3>
-        <p class="no-margin-top">{{ entry.feed }} | {{ entry.published |humandate }}</p>
+        <p class="no-margin-top">{{ entry.feed }} | {{ self::display_some(entry.published) }}</p>
       </hgroup>
     </header>
     <p class="flex">

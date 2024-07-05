@@ -1,5 +1,5 @@
-use std::env;
 use std::sync::Arc;
+use std::{env, str::FromStr};
 
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -71,13 +71,14 @@ pub enum Ordering {
     Descending,
 }
 
-impl From<String> for Ordering {
-    fn from(s: String) -> Ordering {
-        match s.as_ref() {
+impl FromStr for Ordering {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Ordering> {
+        Ok(match s {
             "ASC" => Ordering::Ascending,
             "DESC" => Ordering::Descending,
             &_ => Ordering::Ascending,
-        }
+        })
     }
 }
 
@@ -87,13 +88,14 @@ pub enum EntryFilter {
     All,
 }
 
-impl From<String> for EntryFilter {
-    fn from(s: String) -> EntryFilter {
-        match s.as_str() {
+impl FromStr for EntryFilter {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<EntryFilter> {
+        Ok(match s {
             "unread" => EntryFilter::Unread,
             "starred" => EntryFilter::Starred,
             _ => EntryFilter::All,
-        }
+        })
     }
 }
 

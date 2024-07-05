@@ -4,7 +4,7 @@
     <header>
       <hgroup>
         <h3 class="no-margin-bottom">{{ feed.name }}</a></h3>
-        <p class="no-margin-top">{{ feed.site_url }} | {{ feed.last_fetched |humandate }}</p>
+        <p class="no-margin-top">{{ feed.site_url }} | {{ self::display_some(feed.last_fetched) }}</p>
       </hgroup>
     </header>
     <p class="flex">

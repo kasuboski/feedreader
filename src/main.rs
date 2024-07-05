@@ -1,35 +1,47 @@
 #![warn(clippy::needless_pass_by_value)]
 
-use std::env;
 use std::fs::File;
+use std::future::IntoFuture;
 use std::time::Duration;
-
-#[macro_use]
-extern crate log;
+use std::{env, fmt};
 
 use anyhow::anyhow;
 
-use askama_warp::Template;
+use askama_axum::Template;
+use axum::body::Body;
+use axum::extract::{Path, State};
+use axum::http::header::{
+    ACCESS_CONTROL_REQUEST_HEADERS, ACCESS_CONTROL_REQUEST_METHOD, CONTENT_TYPE, ORIGIN, REFERER,
+    USER_AGENT,
+};
+use axum::http::{HeaderMap, Method, Response, StatusCode};
+use axum::response::{IntoResponse, Redirect};
+use axum::routing::{delete, get, post};
+use axum::{http, Form, Json, Router};
 use chrono::{DateTime, Utc};
-use db::TursoCreds;
+use chrono_humanize::HumanTime;
+use db::{EntryFilter, Ordering, TursoCreds};
 use feed_rs::parser;
 use opml::OPML;
-use rweb::*;
 use serde::{Deserialize, Serialize};
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::time;
 use tokio_stream::wrappers::{IntervalStream, SignalStream};
-use warp::http::Uri;
 
 use futures::stream::StreamExt;
 use futures::{future, stream};
 
+use http::header::{ACCEPT, AUTHORIZATION};
 use lazy_static::lazy_static;
 use regex::Regex;
+use tower_http::cors::{Any, CorsLayer};
+use tracing::{error, info};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 mod db;
 
-#[derive(Debug, Clone, Schema, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(transparent)]
 struct UtcTime(DateTime<Utc>);
 
@@ -39,18 +51,24 @@ impl From<DateTime<Utc>> for UtcTime {
     }
 }
 
-#[derive(Schema, Deserialize, Serialize)]
+impl fmt::Display for UtcTime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", HumanTime::from(self.0))
+    }
+}
+
+#[derive(Deserialize, Serialize)]
 struct Healthz {
     up: bool,
 }
 
-#[derive(Schema, Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 struct Dump {
     feeds: Vec<Feed>,
     entries: Vec<Entry>,
 }
 
-#[derive(Default, Debug, Clone, Schema, Deserialize, Serialize)]
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
 struct Feed {
     id: String,
     name: String,
@@ -74,7 +92,7 @@ impl Feed {
     }
 }
 
-#[derive(Default, Debug, Clone, Schema, Deserialize, Serialize)]
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
 struct Entry {
     id: String,
     title: String,
@@ -145,7 +163,9 @@ impl From<&feed_rs::model::Entry> for Entry {
 
         let published = if let Some(p) = e.published {
             Some(UtcTime(p))
-        } else { e.updated.map(UtcTime) };
+        } else {
+            e.updated.map(UtcTime)
+        };
 
         Entry::new(
             &e.id,
@@ -154,6 +174,16 @@ impl From<&feed_rs::model::Entry> for Entry {
             comments_link,
             published,
         )
+    }
+}
+
+pub fn display_some<T>(value: &Option<T>) -> String
+where
+    T: std::fmt::Display,
+{
+    match value {
+        Some(value) => value.to_string(),
+        None => String::new(),
     }
 }
 
@@ -216,49 +246,38 @@ impl From<AddFeedForm> for Feed {
     }
 }
 
-mod filters {
-    use chrono_humanize::HumanTime;
+#[derive(Debug)]
+struct AppError(anyhow::Error);
 
-    use crate::UtcTime;
-
-    pub fn humandate(s: &Option<UtcTime>) -> ::askama::Result<String> {
-        if let Some(date) = s {
-            Ok(format!("{}", HumanTime::from(date.0)))
-        } else {
-            Ok("".to_string())
-        }
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response<Body> {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Something went wrong: {}", self.0),
+        )
+            .into_response()
     }
 }
 
-#[derive(Debug)]
-struct AppError(anyhow::Error);
-impl rweb::reject::Reject for AppError {}
-
-fn reject_anyhow(err: anyhow::Error) -> Rejection {
-    warp::reject::custom(AppError(err))
+impl<E> From<E> for AppError
+where
+    E: Into<anyhow::Error>,
+{
+    fn from(err: E) -> Self {
+        Self(err.into())
+    }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    if env::var_os("RUST_LOG").is_none() {
-        env::set_var("RUST_LOG", "feedreader=info");
-    }
-    pretty_env_logger::init();
-    let log = warp::log("feedreader");
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "feedreader=info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
-    let cors = warp::cors()
-        .allow_any_origin()
-        .allow_headers(vec![
-            "Authorization",
-            "Content-Type",
-            "User-Agent",
-            "Sec-Fetch-Mode",
-            "Referer",
-            "Origin",
-            "Access-Control-Request-Method",
-            "Access-Control-Request-Headers",
-        ])
-        .allow_methods(vec!["GET", "HEAD", "POST", "DELETE"]);
     let db = if let Some(creds) = TursoCreds::from_env() {
         if let Ok(db_path) = env::var("FEED_DB_PATH") {
             db::connect(db::ConnectionBacking::RemoteReplica(creds, db_path))
@@ -398,126 +417,140 @@ async fn main() -> anyhow::Result<()> {
             )
         });
 
-    let routes = index(db.clone())
-        .or(history(db.clone()))
-        .or(get_feeds(db.clone()))
-        .or(get_starred(db.clone()))
-        .or(add_feed())
-        .or(post_feed(db.clone()))
-        .or(remove_feed(db.clone()))
-        .or(mark_entry_read(db.clone()))
-        .or(mark_entry_starred(db.clone()))
-        .or(healthz())
-        .or(dump(db.clone()))
-        .with(log)
-        .with(cors)
-        .recover(|err: Rejection| async move {
-            if let Some(AppError(ae)) = err.find() {
-                error!("app error found, {:?}", ae);
-                Ok(warp::hyper::StatusCode::INTERNAL_SERVER_ERROR)
-            } else {
-                Err(err)
-            }
-        });
+    // TODO: catch all error handler
+    let app = Router::new()
+        .route("/", get(index))
+        .route("/history.html", get(history))
+        .route("/feeds.html", get(get_feeds))
+        .route("/starred.html", get(get_starred))
+        .route("/add_feed.html", get(add_feed))
+        .route("/feeds", post(post_feed))
+        .route("/feeds/:feed_url", delete(remove_feed))
+        .route("/read/:entry_id", post(mark_entry_read))
+        .route("/starred/:entry_id", post(mark_entry_starred))
+        .route("/healthz", get(healthz))
+        .route("/dump", get(dump))
+        .with_state(db)
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_headers([
+                    AUTHORIZATION,
+                    ACCEPT,
+                    CONTENT_TYPE,
+                    USER_AGENT,
+                    REFERER,
+                    ORIGIN,
+                    ACCESS_CONTROL_REQUEST_HEADERS,
+                    ACCESS_CONTROL_REQUEST_METHOD,
+                ])
+                .allow_methods([Method::GET, Method::HEAD, Method::POST, Method::DELETE]),
+        );
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3030")
+        .await
+        .expect("couldn't bind to 3030");
 
     future::select(
         Box::pin(stream),
-        Box::pin(warp::serve(routes).run(([0, 0, 0, 0], 3030))),
+        Box::pin(axum::serve(listener, app).into_future()),
     )
     .await;
     Ok(())
 }
 
-#[get("/")]
-async fn index(#[data] db: db::DB) -> Result<IndexTemplate, Rejection> {
-    let entries = db.get_unread_entries().await.map_err(reject_anyhow)?;
+async fn index(State(db): State<db::DB>) -> Result<IndexTemplate, AppError> {
+    let entries = db.get_unread_entries().await?;
     Ok(IndexTemplate { entries })
 }
 
-#[get("/history.html")]
-async fn history(#[data] db: db::DB) -> Result<HistoryTemplate, Rejection> {
+async fn history(State(db): State<db::DB>) -> Result<HistoryTemplate, AppError> {
     let entries = db
         .get_entries(db::EntryFilter::All, db::Ordering::Descending)
-        .await
-        .map_err(reject_anyhow)?;
+        .await?;
     Ok(HistoryTemplate { entries })
 }
 
-#[get("/feeds.html")]
-async fn get_feeds(#[data] db: db::DB) -> Result<FeedsTemplate, Rejection> {
-    let feeds = db.get_feeds().await.map_err(reject_anyhow)?;
+async fn get_feeds(State(db): State<db::DB>) -> Result<FeedsTemplate, AppError> {
+    let feeds = db.get_feeds().await?;
     Ok(FeedsTemplate { feeds })
 }
 
-#[get("/starred.html")]
-async fn get_starred(#[data] db: db::DB) -> Result<StarredTemplate, Rejection> {
-    let entries = db.get_starred_entries().await.map_err(reject_anyhow)?;
+async fn get_starred(State(db): State<db::DB>) -> Result<StarredTemplate, AppError> {
+    let entries = db.get_starred_entries().await?;
     Ok(StarredTemplate { entries })
 }
 
-#[get("/add_feed.html")]
-async fn add_feed() -> Result<AddFeedTemplate, Rejection> {
+async fn add_feed() -> Result<AddFeedTemplate, AppError> {
     Ok(AddFeedTemplate {})
 }
 
-#[post("/feeds")]
-async fn post_feed(#[form] body: AddFeedForm, #[data] db: db::DB) -> Result<impl Reply, Rejection> {
-    db.add_feeds(vec![body.into()].into_iter())
-        .await
-        .map_err(reject_anyhow)?;
-    Ok(warp::redirect(Uri::from_static("/feeds.html")))
+async fn post_feed(
+    State(db): State<db::DB>,
+    Form(body): Form<AddFeedForm>,
+) -> Result<impl IntoResponse, AppError> {
+    db.add_feeds(vec![body.into()].into_iter()).await?;
+    Ok(Redirect::to("/feeds.html"))
 }
 
-#[delete("/feeds/{feed_url}")]
-async fn remove_feed(feed_url: String, #[data] db: db::DB) -> Result<FeedListTemplate, Rejection> {
-    db.remove_feed(feed_url).await.map_err(reject_anyhow)?;
-    let feeds = db.get_feeds().await.map_err(reject_anyhow)?;
+async fn remove_feed(
+    Path(feed_url): Path<String>,
+    State(db): State<db::DB>,
+) -> Result<FeedListTemplate, AppError> {
+    db.remove_feed(feed_url).await?;
+    let feeds = db.get_feeds().await?;
     Ok(FeedListTemplate { feeds })
 }
 
-#[post("/read/{entry_id}")]
 async fn mark_entry_read(
-    entry_id: String,
-    #[header = "entry_filter"] entry_filter: String,
-    #[header = "ordering"] ordering: String,
-    #[data] db: db::DB,
-) -> Result<EntryListTemplate, Rejection> {
-    let entries = db
-        .mark_entry_read(entry_id, entry_filter.into(), ordering.into())
-        .await
-        .map_err(reject_anyhow)?;
+    Path(entry_id): Path<String>,
+    headers: HeaderMap,
+    State(db): State<db::DB>,
+) -> Result<EntryListTemplate, AppError> {
+    let entry_filter = headers
+        .get("entry_filter")
+        .ok_or_else(|| anyhow!("missing entry_filter header"))?
+        .to_str()?
+        .parse::<EntryFilter>()?;
+    let ordering = headers
+        .get("ordering")
+        .ok_or_else(|| anyhow!("missing ordering header"))?
+        .to_str()?
+        .parse::<Ordering>()?;
+    let entries = db.mark_entry_read(entry_id, entry_filter, ordering).await?;
     Ok(EntryListTemplate { entries })
 }
 
-#[post("/starred/{entry_id}")]
 async fn mark_entry_starred(
-    entry_id: String,
-    #[header = "entry_filter"] entry_filter: String,
-    #[header = "ordering"] ordering: String,
-    #[data] db: db::DB,
-) -> Result<EntryListTemplate, Rejection> {
+    Path(entry_id): Path<String>,
+    headers: HeaderMap,
+    State(db): State<db::DB>,
+) -> Result<EntryListTemplate, AppError> {
+    let entry_filter = headers
+        .get("entry_filter")
+        .ok_or_else(|| anyhow!("missing entry_filter header"))?
+        .to_str()?
+        .parse::<EntryFilter>()?;
+    let ordering = headers
+        .get("ordering")
+        .ok_or_else(|| anyhow!("missing ordering header"))?
+        .to_str()?
+        .parse::<Ordering>()?;
     let entries = db
-        .mark_entry_starred(entry_id, entry_filter.into(), ordering.into())
-        .await
-        .map_err(reject_anyhow)?;
+        .mark_entry_starred(entry_id, entry_filter, ordering)
+        .await?;
     Ok(EntryListTemplate { entries })
 }
 
-#[get("/healthz")]
-fn healthz() -> Json<Healthz> {
-    Healthz { up: true }.into()
+async fn healthz() -> Json<Healthz> {
+    Json(Healthz { up: true })
 }
 
-#[get("/dump")]
-async fn dump(#[data] db: db::DB) -> Result<Json<Dump>, Rejection> {
-    let feeds = db
-        .get_feeds()
-        .await
-        .map_err(|err| warp::reject::custom(AppError(err)))?;
+async fn dump(State(db): State<db::DB>) -> Result<Json<Dump>, AppError> {
+    let feeds = db.get_feeds().await?;
     let entries = db
         .get_entries(db::EntryFilter::All, db::Ordering::Descending)
-        .await
-        .map_err(|err| warp::reject::custom(AppError(err)))?;
+        .await?;
 
     Ok(Dump { feeds, entries }.into())
 }
