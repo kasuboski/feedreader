@@ -329,3 +329,71 @@ impl From<UtcTime> for libsql::Value {
         libsql::Value::Text(t.0.to_rfc3339())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[tokio::test]
+    async fn add_list_feeds() -> Result<(), anyhow::Error> {
+        let db: DB = connect(ConnectionBacking::Memory).await?;
+        db.init().await?;
+        let feeds = vec![
+            Feed {
+                id: base64::encode_config("HackerNews", base64::URL_SAFE),
+                name: "HackerNews".to_string(),
+                site_url: "https://news.ycombinator.com".to_string(),
+                feed_url: "https://news.ycombinator.com/rss".to_string(),
+                last_fetched: Some(Utc::now().into()),
+                fetch_error: None,
+                category: "tech".to_string(),
+            },
+            Feed {
+                id: base64::encode_config("Product Hunt", base64::URL_SAFE),
+                name: "Product Hunt".to_string(),
+                site_url: "https://www.producthunt.com".to_string(),
+                feed_url: "https://www.producthunt.com/feed".to_string(),
+                last_fetched: None,
+                fetch_error: None,
+                category: "tech".to_string(),
+            },
+        ];
+
+        db.add_feeds(feeds.into_iter()).await?;
+        let f = db.get_feeds().await?;
+        assert_eq!(f.len(), 2);
+        assert_eq!(f[0].name, "HackerNews");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn add_list_entries() -> Result<(), anyhow::Error> {
+        let db: DB = connect(ConnectionBacking::Memory).await?;
+        db.init().await?;
+        let entries = vec![
+            Entry::new(
+                "my-entry",
+                "Cool Post".to_string(),
+                "https://content.com/1".to_string(),
+                "".to_string(),
+                Some(Utc::now().into()),
+            ),
+            Entry::new(
+                "your-entry",
+                "Gross Post".to_string(),
+                "https://content.com/2".to_string(),
+                "".to_string(),
+                Some(Utc::now().into()),
+            ),
+        ];
+
+        db.add_entries(entries.into_iter()).await?;
+        let es = db
+            .get_entries(EntryFilter::All, Ordering::Ascending)
+            .await?;
+        assert_eq!(es.len(), 2);
+        assert_eq!(es[0].title, "Cool Post");
+        assert_ne!(es[0].id, "my-entry");
+        Ok(())
+    }
+}
