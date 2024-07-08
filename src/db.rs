@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS entries
     starred       BOOLEAN,
     feed          TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_entries_read ON entries(read, published ASC);
 "#,
             )
             .await
