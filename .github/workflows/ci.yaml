@@ -3,12 +3,12 @@ name: ci
 on:
   push:
     paths:
-    - 'src/**'
-    - 'templates/**'
-    - 'Cargo.*'
-    - 'Dockerfile'
-    - '**/*.nix'
-    - '.github/workflows/ci.yaml'
+      - "src/**"
+      - "templates/**"
+      - "Cargo.*"
+      - "Earthfile"
+      - "**/*.nix"
+      - ".github/workflows/ci.yaml"
   workflow_dispatch: {}
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
           github-token: ${{ github.token }}
       - uses: cachix/cachix-action@v15
         with:
-          name: kasuboski-feedreader 
+          name: kasuboski-feedreader
           extraPullNames: nix-community
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
@@ -59,7 +59,7 @@ jobs:
           github-token: ${{ github.token }}
       - uses: cachix/cachix-action@v15
         with:
-          name: kasuboski-feedreader 
+          name: kasuboski-feedreader
           extraPullNames: nix-community
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
@@ -70,5 +70,4 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Combine and Push images
         run: |
-          nix develop --command just multiarch-push  
- 
+          nix develop --command just multiarch-push
