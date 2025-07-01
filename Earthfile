@@ -3,12 +3,12 @@ VERSION 0.8
 IMPORT github.com/earthly/lib/rust:3.0.1 AS rust
 
 install:
-  FROM rust:1.78.0-bookworm
+  FROM rust:1.88.0-bookworm
   # RUN apt-get update -qq
   # RUN apt-get install --no-install-recommends -qq autoconf autotools-dev libtool-bin clang cmake bsdmainutils
   RUN rustup component add clippy
   RUN rustup component add rustfmt
-  # Call +INIT before copying the source file to avoid installing dependencies every time source code changes. 
+  # Call +INIT before copying the source file to avoid installing dependencies every time source code changes.
   # This parametrization will be used in future calls to functions of the library
   DO rust+INIT --keep_fingerprints=true
 
