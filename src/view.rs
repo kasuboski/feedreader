@@ -1,9 +1,9 @@
 use anyhow::anyhow;
-use askama_axum::{IntoResponse, Template};
+use askama::Template;
 use axum::{
     extract::{Path, State},
     http::HeaderMap,
-    response::Redirect,
+    response::{Html, IntoResponse, Redirect},
     routing::{delete, get, post},
     Form, Router,
 };
@@ -16,6 +16,31 @@ use crate::{
 
 use super::{Entry, Feed};
 
+macro_rules! impl_template_response {
+    ($($template:ty),*) => {
+        $(
+            impl IntoResponse for $template {
+                fn into_response(self) -> axum::response::Response {
+                    match self.render() {
+                        Ok(html) => Html(html).into_response(),
+                        Err(_) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Template error").into_response(),
+                    }
+                }
+            }
+        )*
+    };
+}
+
+impl_template_response!(
+    IndexTemplate,
+    HistoryTemplate,
+    EntryListTemplate,
+    FeedsTemplate,
+    FeedListTemplate,
+    StarredTemplate,
+    AddFeedTemplate
+);
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(index))
@@ -24,19 +49,18 @@ pub fn routes() -> Router<AppState> {
         .route("/starred.html", get(get_starred))
         .route("/add_feed.html", get(add_feed))
         .route("/feeds", post(post_feed))
-        .route("/feeds/:feed_url", delete(remove_feed))
-        .route("/read/:entry_id", post(mark_entry_read))
-        .route("/starred/:entry_id", post(mark_entry_starred))
+        .route("/feeds/{feed_url}", delete(remove_feed))
+        .route("/read/{entry_id}", post(mark_entry_read))
+        .route("/starred/{entry_id}", post(mark_entry_starred))
 }
 
 pub fn display_some<T>(value: &Option<T>) -> String
 where
     T: std::fmt::Display,
 {
-    match value {
-        Some(value) => value.to_string(),
-        None => String::new(),
-    }
+    value
+        .as_ref()
+        .map_or_else(|| String::new(), |value| value.to_string())
 }
 
 #[derive(Template)]
@@ -183,8 +207,6 @@ async fn mark_entry_starred(
 
 #[cfg(test)]
 mod test {
-    use chrono::Utc;
-
     use super::*;
 
     #[test]
@@ -204,24 +226,18 @@ mod test {
     #[test]
     fn render_feedstemplate() {
         let feeds = vec![
-            Feed {
-                id: base64::encode_config("HackerNews", base64::URL_SAFE),
-                name: "HackerNews".to_string(),
-                site_url: "https://news.ycombinator.com".to_string(),
-                feed_url: "https://news.ycombinator.com/rss".to_string(),
-                last_fetched: Some(Utc::now().into()),
-                fetch_error: None,
-                category: "tech".to_string(),
-            },
-            Feed {
-                id: base64::encode_config("Product Hunt", base64::URL_SAFE),
-                name: "Product Hunt".to_string(),
-                site_url: "https://www.producthunt.com".to_string(),
-                feed_url: "https://www.producthunt.com/feed".to_string(),
-                last_fetched: None,
-                fetch_error: None,
-                category: "tech".to_string(),
-            },
+            Feed::new(
+                "HackerNews".to_string(),
+                "https://news.ycombinator.com".to_string(),
+                "https://news.ycombinator.com/rss".to_string(),
+                "tech".to_string(),
+            ),
+            Feed::new(
+                "Product Hunt".to_string(),
+                "https://www.producthunt.com".to_string(),
+                "https://www.producthunt.com/feed".to_string(),
+                "tech".to_string(),
+            ),
         ];
         let temp = FeedsTemplate { feeds };
 

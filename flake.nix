@@ -44,10 +44,11 @@
         devShells.default = pkgs.mkShell {
           # instead of passing `buildInputs` / `nativeBuildInputs`,
           # we refer to an existing derivation here
-          buildInputs = [] ++ pkgs.lib.optional pkgs.stdenv.isDarwin [pkgs.libiconv pkgs.darwin.apple_sdk.frameworks.Security];
+          buildInputs = [] ++ pkgs.lib.optional pkgs.stdenv.isDarwin [pkgs.libiconv pkgs.darwin.apple_sdk.frameworks.Security pkgs.darwin.apple_sdk.frameworks.SystemConfiguration];
           packages = with pkgs; [
             just
             rustToolchain
+            cargo-edit
             cargo-nextest
             turso-cli
 

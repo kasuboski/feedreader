@@ -340,24 +340,18 @@ mod test {
         let db: DB = connect(ConnectionBacking::Memory).await?;
         db.init().await?;
         let feeds = vec![
-            Feed {
-                id: base64::encode_config("HackerNews", base64::URL_SAFE),
-                name: "HackerNews".to_string(),
-                site_url: "https://news.ycombinator.com".to_string(),
-                feed_url: "https://news.ycombinator.com/rss".to_string(),
-                last_fetched: Some(Utc::now().into()),
-                fetch_error: None,
-                category: "tech".to_string(),
-            },
-            Feed {
-                id: base64::encode_config("Product Hunt", base64::URL_SAFE),
-                name: "Product Hunt".to_string(),
-                site_url: "https://www.producthunt.com".to_string(),
-                feed_url: "https://www.producthunt.com/feed".to_string(),
-                last_fetched: None,
-                fetch_error: None,
-                category: "tech".to_string(),
-            },
+            Feed::new(
+                "HackerNews".to_string(),
+                "https://news.ycombinator.com".to_string(),
+                "https://news.ycombinator.com/rss".to_string(),
+                "tech".to_string(),
+            ),
+            Feed::new(
+                "Product Hunt".to_string(),
+                "https://www.producthunt.com".to_string(),
+                "https://www.producthunt.com/feed".to_string(),
+                "tech".to_string(),
+            ),
         ];
 
         db.add_feeds(feeds.into_iter()).await?;

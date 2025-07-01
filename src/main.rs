@@ -6,6 +6,7 @@ use std::time::Duration;
 use std::{env, fmt};
 
 use anyhow::anyhow;
+use base64::Engine;
 
 use axum::body::Body;
 use axum::extract::{MatchedPath, State};
@@ -83,7 +84,7 @@ struct Feed {
 impl Feed {
     pub fn new(name: String, site_url: String, feed_url: String, category: String) -> Self {
         Feed {
-            id: base64::encode_config(&feed_url, base64::URL_SAFE),
+            id: base64::engine::general_purpose::URL_SAFE.encode(&feed_url),
             name,
             site_url,
             feed_url,
@@ -115,7 +116,7 @@ impl Entry {
         published: Option<UtcTime>,
     ) -> Self {
         Entry {
-            id: base64::encode_config(id.as_bytes(), base64::URL_SAFE),
+            id: base64::engine::general_purpose::URL_SAFE.encode(id.as_bytes()),
             title,
             content_link,
             comments_link,
@@ -316,7 +317,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 };
 
-                let feed = match parser::parse_with_uri(body.as_ref(), Some(&f.feed_url)) {
+                let feed = match parser::parse(body.as_ref()) {
                     Ok(f) => f,
                     Err(e) => {
                         error!("Couldn't parse feed {}: {}", &f.feed_url, e);
