@@ -264,7 +264,7 @@ CREATE TABLE IF NOT EXISTS feed_updates
             EntryFilter::Unread => "WHERE read = false",
             EntryFilter::All => "",
         };
-        let statement_string = format!("SELECT id, title, content_link, comments_link, robust_link, published, read, starred, feed FROM entries {} {}", where_clause, order_clause);
+        let statement_string = format!("SELECT id, title, content_link, comments_link, robust_link, published, read, starred, feed FROM entries {where_clause} {order_clause}");
         let mut stmt = self
             .main_conn
             .prepare(&statement_string)

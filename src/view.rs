@@ -60,7 +60,7 @@ where
 {
     value
         .as_ref()
-        .map_or_else(|| String::new(), |value| value.to_string())
+        .map_or_else(String::new, |value| value.to_string())
 }
 
 #[derive(Template)]
