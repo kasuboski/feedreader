@@ -19,4 +19,11 @@ defmodule FeedreaderWeb.TimeHelpers do
       true -> Calendar.strftime(dt, "%b %d, %Y")
     end
   end
+
+  def humanize_date(%NaiveDateTime{} = ndt) do
+    case DateTime.from_naive(ndt, "Etc/UTC") do
+      {:ok, dt} -> humanize_date(dt)
+      {:error, _} -> nil
+    end
+  end
 end

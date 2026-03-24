@@ -81,10 +81,8 @@
               <label class="label">
                 <span class="label-text">Select OPML file</span>
               </label>
-              <input
-                type="file"
-                name="opml[file]"
-                accept=".opml,.xml"
+              <.live_file_input
+                upload={@uploads.opml}
                 class="file-input file-input-bordered w-full"
               />
             </div>

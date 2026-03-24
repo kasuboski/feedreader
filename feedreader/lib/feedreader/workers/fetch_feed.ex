@@ -1,7 +1,10 @@
 defmodule FeedReader.Workers.FetchFeed do
+  @moduledoc "Oban worker that fetches and parses a single RSS/Atom feed."
   use Oban.Worker, queue: :default
 
   require Logger
+
+  import SweetXml
 
   alias FeedReader.Core
 
@@ -47,8 +50,6 @@ defmodule FeedReader.Workers.FetchFeed do
   end
 
   def parse_feed(body) do
-    import SweetXml
-
     try do
       entries =
         body
@@ -63,7 +64,19 @@ defmodule FeedReader.Workers.FetchFeed do
         for item <- items do
           guid = xpath(item, ~x"./guid/text()"s)
           title = xpath(item, ~x"./title/text()"s)
-          link = xpath(item, ~x"./link/text()"s)
+          # Try Atom link attributes first, then text content
+          link =
+            case xpath(item, ~x"./link/@href"s) do
+              "" ->
+                case xpath(item, ~x"./link[@rel='alternate']/@href"s) do
+                  "" -> xpath(item, ~x"./link/text()"s)
+                  val -> val
+                end
+
+              val ->
+                val
+            end
+
           comments = xpath(item, ~x"./comments/text()"s)
 
           # Try pubDate (RSS) or published (Atom)
@@ -163,15 +176,25 @@ defmodule FeedReader.Workers.FetchFeed do
 
   defp parse_tz_offset("+" <> rest) do
     case Integer.parse(rest) do
-      {offset, ""} -> offset
-      _ -> 0
+      {value, ""} ->
+        hours = div(value, 100)
+        minutes = rem(value, 100)
+        hours * 60 + minutes
+
+      _ ->
+        0
     end
   end
 
   defp parse_tz_offset("-" <> rest) do
     case Integer.parse(rest) do
-      {offset, ""} -> -offset
-      _ -> 0
+      {value, ""} ->
+        hours = div(value, 100)
+        minutes = rem(value, 100)
+        -(hours * 60 + minutes)
+
+      _ ->
+        0
     end
   end
 

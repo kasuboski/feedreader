@@ -9,49 +9,56 @@ defmodule Feedreader.Repo.Migrations.AddCoreResources do
 
   def up do
     create table(:feeds, primary_key: false) do
-      add :fetch_error, :text
-      add :last_fetched_at, :utc_datetime
-      add :category, :text
-      add :feed_url, :text, null: false
-      add :site_url, :text
-      add :name, :text
-      add :id, :uuid, null: false, primary_key: true
+      add(:fetch_error, :text)
+      add(:last_fetched_at, :utc_datetime)
+      add(:category, :text)
+      add(:feed_url, :text, null: false)
+      add(:site_url, :text)
+      add(:name, :text)
+      add(:id, :uuid, null: false, primary_key: true)
     end
 
-    create unique_index(:feeds, [:feed_url], name: "feeds_unique_feed_url_index")
+    create(unique_index(:feeds, [:feed_url], name: "feeds_unique_feed_url_index"))
 
     create table(:entries, primary_key: false) do
-      add :feed_id, references(:feeds, column: :id, name: "entries_feed_id_fkey", type: :uuid),
+      add(:feed_id, references(:feeds, column: :id, name: "entries_feed_id_fkey", type: :uuid),
         null: false
+      )
 
-      add :is_starred, :boolean, null: false
-      add :is_read, :boolean, null: false
-      add :published_at, :utc_datetime
-      add :comments_link, :text
-      add :content_link, :text
-      add :title, :text
-      add :external_id, :text, null: false
-      add :id, :uuid, null: false, primary_key: true
+      add(:is_starred, :boolean, null: false)
+      add(:is_read, :boolean, null: false)
+      add(:published_at, :utc_datetime)
+      add(:comments_link, :text)
+      add(:content_link, :text)
+      add(:title, :text)
+      add(:external_id, :text, null: false)
+      add(:id, :uuid, null: false, primary_key: true)
     end
 
-    create unique_index(:entries, [:feed_id, :external_id],
-             name: "entries_unique_entry_per_feed_index"
-           )
+    create(
+      unique_index(:entries, [:feed_id, :external_id],
+        name: "entries_unique_entry_per_feed_index"
+      )
+    )
   end
 
   def down do
-    drop_if_exists unique_index(:entries, [:feed_id, :external_id],
-                     name: "entries_unique_entry_per_feed_index"
-                   )
+    drop_if_exists(
+      unique_index(:entries, [:feed_id, :external_id],
+        name: "entries_unique_entry_per_feed_index"
+      )
+    )
 
-    raise "SQLite does not support dropping foreign key constraints. " <>
-            "You will need to manually recreate the `entries` table without the `entries_feed_id_fkey` constraint. " <>
-            "See https://www.techonthenet.com/sqlite/foreign_keys/drop.php for guidance."
+    IO.warn(
+      "SQLite does not support dropping foreign key constraints. " <>
+        "You will need to manually recreate the `entries` table without the `entries_feed_id_fkey` constraint. " <>
+        "See https://www.techonthenet.com/sqlite/foreign_keys/drop.php for guidance."
+    )
 
-    drop table(:entries)
+    drop(table(:entries))
 
-    drop_if_exists unique_index(:feeds, [:feed_url], name: "feeds_unique_feed_url_index")
+    drop_if_exists(unique_index(:feeds, [:feed_url], name: "feeds_unique_feed_url_index"))
 
-    drop table(:feeds)
+    drop(table(:feeds))
   end
 end

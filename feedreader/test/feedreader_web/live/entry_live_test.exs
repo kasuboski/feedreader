@@ -102,7 +102,7 @@ defmodule FeedreaderWeb.EntryLiveTest do
       assert html =~ "Load More"
     end
 
-    test "load_more button is visible when more entries exist", %{conn: conn, feed: feed} do
+    test "load_more button loads additional entries", %{conn: conn, feed: feed} do
       for i <- 1..60 do
         Core.upsert_from_feed!(%{
           external_id: "loadmore-#{i}",
@@ -114,15 +114,19 @@ defmodule FeedreaderWeb.EntryLiveTest do
 
       {:ok, view, html} = live(conn, "/")
 
-      # Should show Load More button
+      # Should show Load More button and some entries
       assert html =~ "Load More"
       assert has_element?(view, "#load-more-btn")
+      assert html =~ "Entry 1"
 
       # Click the load more button
-      render_click(view, "load_more")
+      view
+      |> element("#load-more-btn")
+      |> render_click()
 
-      # After clicking, button may or may not be visible depending on pagination
-      # The important thing is the event is handled without error
+      # After clicking, more entries should be loaded
+      updated_html = render(view)
+      assert updated_html =~ "Entry 51" || updated_html =~ "Entry 60"
     end
 
     test "pagination respects filter (unread)", %{conn: conn, feed: feed} do
@@ -132,19 +136,20 @@ defmodule FeedreaderWeb.EntryLiveTest do
           external_id: "unread-pag-#{i}",
           title: "Unread #{i}",
           content_link: "https://example.com/unread#{i}",
-          feed_id: feed.id,
-          is_read: false
+          feed_id: feed.id
         })
       end
 
       for i <- 1..5 do
-        Core.upsert_from_feed!(%{
-          external_id: "read-pag-#{i}",
-          title: "Read #{i}",
-          content_link: "https://example.com/read#{i}",
-          feed_id: feed.id,
-          is_read: true
-        })
+        entry =
+          Core.upsert_from_feed!(%{
+            external_id: "read-pag-#{i}",
+            title: "Read #{i}",
+            content_link: "https://example.com/read#{i}",
+            feed_id: feed.id
+          })
+
+        {:ok, _} = Core.update_entry(entry, %{is_read: true})
       end
 
       {:ok, _view, html} = live(conn, "/")

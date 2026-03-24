@@ -13,7 +13,7 @@
 
     <div id="entries" phx-update="stream" class="space-y-4">
       <div
-        :for={{id, entry} <- (@streams && @streams.entries) || []}
+        :for={{id, entry} <- @streams.entries}
         id={id}
         class="bg-base-200/80 rounded-lg border border-base-300/50 p-4 backdrop-blur-sm"
       >
@@ -65,25 +65,25 @@
           </button>
         </div>
       </div>
+    </div>
 
-      <div :if={@has_more} id="load-more-container" class="text-center py-4">
-        <button
-          id="load-more-btn"
-          phx-click="load_more"
-          class="btn btn-outline btn-sm"
-        >
-          Load More
-        </button>
-      </div>
-
-      <div
-        :if={!@has_more && @entry_count == 0}
-        id="empty-state"
-        class="text-center py-8 text-base-content/60"
+    <div :if={@has_more} id="load-more-container" class="text-center py-4">
+      <button
+        id="load-more-btn"
+        phx-click="load_more"
+        class="btn btn-outline btn-sm"
       >
-        <p>Nothing left to read</p>
-        <p class="mt-2">Touch grass 🌿</p>
-      </div>
+        Load More
+      </button>
+    </div>
+
+    <div
+      :if={!@has_more && @entry_count == 0}
+      id="empty-state"
+      class="text-center py-8 text-base-content/60"
+    >
+      <p>Nothing left to read</p>
+      <p class="mt-2">Touch grass 🌿</p>
     </div>
   </div>
 </Layouts.app>

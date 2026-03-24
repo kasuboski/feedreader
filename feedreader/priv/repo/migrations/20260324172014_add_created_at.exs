@@ -23,11 +23,11 @@ defmodule Feedreader.Repo.Migrations.AddCreatedAt do
 
     execute("""
     INSERT INTO entries_new (id, feed_id, external_id, title, content_link, comments_link, published_at, is_read, is_starred, created_at)
-    SELECT id, feed_id, external_id, title, content_link, comments_link, published_at, is_read, is_starred, datetime('now')
+    SELECT id, feed_id, external_id, title, content_link, comments_link, published_at, is_read, is_starred, COALESCE(published_at, datetime('now'))
     FROM entries
     """)
 
-    execute("DROP TABLE entries")
+    execute("DROP TABLE IF EXISTS entries")
     execute("ALTER TABLE entries_new RENAME TO entries")
 
     execute("CREATE INDEX IF NOT EXISTS entries_feed_id_index ON entries(feed_id)")

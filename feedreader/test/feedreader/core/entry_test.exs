@@ -31,9 +31,10 @@ defmodule FeedReader.Core.EntryTest do
           external_id: "entry-1",
           title: "Test Entry",
           content_link: "https://example.com/entry1",
-          feed_id: feed.id,
-          is_starred: true
+          feed_id: feed.id
         })
+
+      {:ok, entry} = Core.update_entry(entry, %{is_starred: true})
 
       assert entry.is_starred == true
 
@@ -58,6 +59,24 @@ defmodule FeedReader.Core.EntryTest do
       assert {:ok, updated} = Core.toggle_read(entry)
 
       assert updated.is_read == true
+    end
+
+    test "toggles is_read from true to false", %{feed: feed} do
+      entry =
+        Core.upsert_from_feed!(%{
+          external_id: "entry-1",
+          title: "Test Entry",
+          content_link: "https://example.com/entry1",
+          feed_id: feed.id
+        })
+
+      {:ok, entry} = Core.update_entry(entry, %{is_read: true})
+
+      assert entry.is_read == true
+
+      assert {:ok, updated} = Core.toggle_read(entry)
+
+      assert updated.is_read == false
     end
   end
 
@@ -104,7 +123,7 @@ defmodule FeedReader.Core.EntryTest do
 
   describe "unread/0" do
     test "returns only unread entries", %{feed: feed} do
-      _entry1 =
+      unread_entry =
         Core.upsert_from_feed!(%{
           external_id: "unread-1",
           title: "Unread Entry",
@@ -112,45 +131,42 @@ defmodule FeedReader.Core.EntryTest do
           feed_id: feed.id
         })
 
-      entry2 =
+      read_entry =
         Core.upsert_from_feed!(%{
           external_id: "read-1",
           title: "Read Entry",
           content_link: "https://example.com/read1",
-          feed_id: feed.id,
-          is_read: true
+          feed_id: feed.id
         })
 
-      assert entry2.is_read == true
-
-      {:ok, updated_entry2} = Core.toggle_read(entry2)
-
-      assert updated_entry2.is_read == false
+      {:ok, _} = Core.update_entry(read_entry, %{is_read: true})
 
       {:ok, results} = Core.list_unread()
 
-      assert length(results.results) == 2
+      assert length(results.results) == 1
+      assert hd(results.results).id == unread_entry.id
+      assert hd(results.results).title == "Unread Entry"
     end
   end
 
   describe "starred/0" do
     test "returns only starred entries", %{feed: feed} do
-      _entry1 =
+      entry1 =
         Core.upsert_from_feed!(%{
           external_id: "starred-1",
           title: "Starred Entry",
           content_link: "https://example.com/starred1",
-          feed_id: feed.id,
-          is_starred: true
+          feed_id: feed.id
         })
+
+      {:ok, _} = Core.update_entry(entry1, %{is_starred: true})
 
       _entry2 =
         Core.upsert_from_feed!(%{
           external_id: "unstarred-1",
           title: "Unstarred Entry",
           content_link: "https://example.com/unstarred1",
-          feed_id: feed.id,
-          is_starred: false
+          feed_id: feed.id
         })
 
       {:ok, results} = Core.list_starred()
@@ -202,25 +218,27 @@ defmodule FeedReader.Core.EntryTest do
     test "list_starred returns entries sorted by published_at ascending", %{feed: feed} do
       now = DateTime.utc_now()
 
-      _older =
+      older =
         Core.upsert_from_feed!(%{
           external_id: "starred-order-1",
           title: "Older Starred",
           content_link: "https://example.com/older",
           feed_id: feed.id,
-          published_at: DateTime.add(now, -3600, :second),
-          is_starred: true
+          published_at: DateTime.add(now, -3600, :second)
         })
 
-      _newer =
+      {:ok, _} = Core.update_entry(older, %{is_starred: true})
+
+      newer =
         Core.upsert_from_feed!(%{
           external_id: "starred-order-2",
           title: "Newer Starred",
           content_link: "https://example.com/newer",
           feed_id: feed.id,
-          published_at: DateTime.add(now, -1800, :second),
-          is_starred: true
+          published_at: DateTime.add(now, -1800, :second)
         })
+
+      {:ok, _} = Core.update_entry(newer, %{is_starred: true})
 
       {:ok, results} = Core.list_starred()
 
@@ -231,25 +249,27 @@ defmodule FeedReader.Core.EntryTest do
     test "list_history returns entries sorted by published_at descending", %{feed: feed} do
       now = DateTime.utc_now()
 
-      _older =
+      older =
         Core.upsert_from_feed!(%{
           external_id: "history-order-1",
           title: "Older History",
           content_link: "https://example.com/older",
           feed_id: feed.id,
-          published_at: DateTime.add(now, -3600, :second),
-          is_read: true
+          published_at: DateTime.add(now, -3600, :second)
         })
 
-      _newer =
+      {:ok, _} = Core.update_entry(older, %{is_read: true})
+
+      newer =
         Core.upsert_from_feed!(%{
           external_id: "history-order-2",
           title: "Newer History",
           content_link: "https://example.com/newer",
           feed_id: feed.id,
-          published_at: DateTime.add(now, -1800, :second),
-          is_read: true
+          published_at: DateTime.add(now, -1800, :second)
         })
+
+      {:ok, _} = Core.update_entry(newer, %{is_read: true})
 
       {:ok, results} = Core.list_history()
 

@@ -13,6 +13,16 @@ defmodule Feedreader.Accounts.User do
   end
 
   authentication do
+    strategies do
+      magic_link do
+        identity_field :email
+
+        sender fn user_or_email, token, _opts ->
+          Feedreader.Accounts.Emails.deliver_magic_link(user_or_email, token)
+        end
+      end
+    end
+
     add_ons do
       log_out_everywhere do
         apply_on_password_change? true
@@ -47,5 +57,14 @@ defmodule Feedreader.Accounts.User do
 
   attributes do
     uuid_primary_key :id
+
+    attribute :email, :string do
+      allow_nil? false
+      public? true
+    end
+  end
+
+  identities do
+    identity :unique_email, [:email]
   end
 end

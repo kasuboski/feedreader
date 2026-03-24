@@ -2,7 +2,7 @@ This is a web application written using the Phoenix web framework.
 
 ## Project guidelines
 
-- Use `misa run pre-commit` alias when you are done with all changes and fix any pending issues
+- Use `mise run pre-commit` alias when you are done with all changes and fix any pending issues
 - Use the already included and available `:req` (`Req`) library for HTTP requests, **avoid** `:httpoison`, `:tesla`, and `:httpc`. Req is included by default and is the preferred HTTP client for Phoenix apps
 
 ### Phoenix v1.8 guidelines
@@ -100,7 +100,7 @@ custom classes must fully style the input
       ref = Process.monitor(pid)
       assert_receive {:DOWN, ^ref, :process, ^pid, :normal}
 
-   - Instead of sleeping to synchronize before the next call, **always** use `_ = :sys.get_state/1` to ensure the process has handled prior messages
+  - Instead of sleeping to synchronize before the next call, **always** use `_ = :sys.get_state/1` to ensure the process has handled prior messages
 <!-- phoenix:elixir-end -->
 
 <!-- phoenix:phoenix-start -->

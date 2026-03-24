@@ -1,4 +1,5 @@
 defmodule FeedReader.Core.Feed do
+  @moduledoc "Ash resource representing an RSS/Atom feed subscription."
   use Ash.Resource,
     domain: FeedReader.Core,
     data_layer: AshSqlite.DataLayer

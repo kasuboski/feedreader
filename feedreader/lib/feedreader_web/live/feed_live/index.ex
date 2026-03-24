@@ -3,6 +3,8 @@ defmodule FeedreaderWeb.FeedLive.Index do
 
   alias FeedReader.Core
 
+  on_mount({FeedreaderWeb.LiveUserAuth, :live_user_required})
+
   @impl true
   def mount(_params, _session, socket) do
     feeds = Core.list_feeds!()
@@ -11,7 +13,8 @@ defmodule FeedreaderWeb.FeedLive.Index do
      socket
      |> assign(:feeds, feeds)
      |> assign(:form, to_form(%{}))
-     |> assign(:current_path, "/feeds")}
+     |> assign(:current_path, "/feeds")
+     |> allow_upload(:opml, accept: ~w(.opml text/xml application/xml), max_entries: 1)}
   end
 
   @impl true
@@ -40,37 +43,51 @@ defmodule FeedreaderWeb.FeedLive.Index do
   end
 
   @impl true
-  def handle_event("import_opml", %{"opml" => %{"file" => upload}}, socket) do
-    file_content =
-      case upload do
-        %{path: path} -> File.read!(path)
-        _ -> nil
-      end
+  def handle_event("validate_opml", _params, socket) do
+    {:noreply, socket}
+  end
 
-    if file_content do
-      {success_count, _error_count} = Core.import_opml(file_content)
+  @impl true
+  def handle_event("import_opml", _params, socket) do
+    file_entries =
+      consume_uploaded_entries(socket, :opml, fn %{path: tmp_path}, _entry ->
+        {:ok, File.read!(tmp_path)}
+      end)
 
-      feeds = Core.list_feeds!()
+    case file_entries do
+      [file_content] ->
+        {success_count, _error_count} = Core.import_opml(file_content)
+        feeds = Core.list_feeds!()
 
-      {:noreply,
-       socket
-       |> assign(:feeds, feeds)
-       |> put_flash(:info, "Imported #{success_count} feeds")}
-    else
-      {:noreply, socket |> put_flash(:error, "Failed to read OPML file")}
+        {:noreply,
+         socket
+         |> assign(:feeds, feeds)
+         |> put_flash(:info, "Imported #{success_count} feeds")}
+
+      [] ->
+        {:noreply, put_flash(socket, :error, "No file uploaded")}
     end
   end
 
   @impl true
   def handle_event("delete_feed", %{"id" => id}, socket) do
-    feed = Core.get_feed!(id)
-    Core.delete_feed!(feed)
+    case Core.get_feed(id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Feed not found")}
 
-    feeds = Core.list_feeds!()
+      feed ->
+        case Core.delete_feed(feed) do
+          {:ok, _} ->
+            feeds = Core.list_feeds!()
 
-    {:noreply,
-     socket
-     |> assign(:feeds, feeds)
-     |> put_flash(:info, "Feed deleted")}
+            {:noreply,
+             socket
+             |> assign(:feeds, feeds)
+             |> put_flash(:info, "Feed deleted")}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, "Unable to delete feed")}
+        end
+    end
   end
 end

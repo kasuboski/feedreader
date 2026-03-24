@@ -11,7 +11,6 @@ config :ash_oban, pro?: false
 
 config :feedreader, Oban,
   engine: Oban.Engines.Lite,
-  notifier: Oban.Notifiers.PG,
   queues: [default: 10, scheduler: 5],
   repo: Feedreader.Repo,
   plugins: [
@@ -19,6 +18,7 @@ config :feedreader, Oban,
      crontab: [
        {"*/3 * * * *", FeedReader.Workers.Scheduler}
      ]},
+    {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(5)},
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24}
   ]
 

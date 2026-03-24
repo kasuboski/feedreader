@@ -1,9 +1,10 @@
 defmodule FeedReader.Core do
+  @moduledoc "Ash domain exposing feed and entry operations."
   use Ash.Domain
 
-  def import_opml(opml_content) do
-    import SweetXml
+  import SweetXml
 
+  def import_opml(opml_content) do
     categories = opml_content |> xpath(~x"//body/outline"l)
 
     feeds =
@@ -31,7 +32,7 @@ defmodule FeedReader.Core do
       Enum.map(feeds, fn feed_attrs ->
         case add_feed(feed_attrs) do
           {:ok, feed} -> {:ok, feed}
-          {:error, _} -> {:error, feed_attrs}
+          {:error, reason} -> {:error, {feed_attrs, reason}}
         end
       end)
 
@@ -57,6 +58,7 @@ defmodule FeedReader.Core do
       define :toggle_read, action: :toggle_read
       define :toggle_starred, action: :toggle_starred
       define :upsert_from_feed, action: :upsert_from_feed
+      define :update_entry, action: :update
     end
   end
 end

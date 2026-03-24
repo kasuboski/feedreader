@@ -1,6 +1,6 @@
 [tools]
-elixir = "latest"
-erlang = "latest"
+elixir = "1.19.5"
+erlang = "28.3"
 
 [tasks.format]
 description = "Format all Elixir files"

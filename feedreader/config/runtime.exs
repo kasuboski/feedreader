@@ -60,7 +60,12 @@ if config_env() == :prod do
       # for details about using IPv6 vs IPv4 and loopback vs public addresses.
       ip: {0, 0, 0, 0, 0, 0, 0, 0}
     ],
-    secret_key_base: secret_key_base
+    secret_key_base: secret_key_base,
+    live_view: [
+      signing_salt:
+        System.get_env("LIVE_VIEW_SIGNING_SALT") ||
+          raise("Missing environment variable `LIVE_VIEW_SIGNING_SALT`!")
+    ]
 
   config :feedreader,
     token_signing_secret:

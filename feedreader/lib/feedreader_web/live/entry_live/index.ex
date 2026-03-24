@@ -5,7 +5,7 @@ defmodule FeedreaderWeb.EntryLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, socket}
+    {:ok, stream(socket, :entries, [])}
   end
 
   @impl true
@@ -19,7 +19,6 @@ defmodule FeedreaderWeb.EntryLive.Index do
      socket
      |> assign(:action, action)
      |> assign(:current_path, uri.path)
-     |> assign(:entries, entries)
      |> assign(:entry_count, length(entries))
      |> assign(:offset, offset)
      |> assign(:has_more, has_more)
@@ -72,7 +71,7 @@ defmodule FeedreaderWeb.EntryLive.Index do
         parts = String.split(host, ".")
 
         case Enum.reverse(parts) do
-          [_, second | _] -> "#{second}.#{List.first(parts)}"
+          [tld, second | _] -> "#{second}.#{tld}"
           [single] -> single
           _ -> host
         end
@@ -96,7 +95,6 @@ defmodule FeedreaderWeb.EntryLive.Index do
           socket
           |> stream_delete(:entries, updated)
           |> assign(:entry_count, new_count)
-          |> assign(:has_more, socket.assigns.has_more && new_count >= 50)
 
         action == :starred && updated.is_starred ->
           socket
@@ -124,7 +122,6 @@ defmodule FeedreaderWeb.EntryLive.Index do
           socket
           |> stream_delete(:entries, updated)
           |> assign(:entry_count, new_count)
-          |> assign(:has_more, socket.assigns.has_more && new_count >= 50)
 
         action == :unread && not updated.is_read ->
           socket

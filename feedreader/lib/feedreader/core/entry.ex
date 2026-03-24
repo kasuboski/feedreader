@@ -1,4 +1,5 @@
 defmodule FeedReader.Core.Entry do
+  @moduledoc "Ash resource representing a single feed entry/article."
   use Ash.Resource,
     domain: FeedReader.Core,
     data_layer: AshSqlite.DataLayer
@@ -18,18 +19,22 @@ defmodule FeedReader.Core.Entry do
     read :unread do
       filter expr(is_read == false)
       prepare build(sort: [published_at: :asc], load: [:feed])
-      pagination offset?: true, default_limit: 50
+      pagination keyset?: true, default_limit: 50
     end
 
     read :starred do
       filter expr(is_starred == true)
       prepare build(sort: [published_at: :asc], load: [:feed])
-      pagination offset?: true, default_limit: 50
+      pagination keyset?: true, default_limit: 50
     end
 
     read :history do
       prepare build(sort: [published_at: :desc], load: [:feed])
-      pagination offset?: true, default_limit: 50
+      pagination keyset?: true, default_limit: 50
+    end
+
+    update :update do
+      accept [:is_read, :is_starred]
     end
 
     update :toggle_read do
@@ -59,9 +64,7 @@ defmodule FeedReader.Core.Entry do
         :content_link,
         :comments_link,
         :published_at,
-        :feed_id,
-        :is_read,
-        :is_starred
+        :feed_id
       ]
 
       upsert? true
