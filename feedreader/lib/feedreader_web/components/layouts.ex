@@ -27,6 +27,11 @@ defmodule FeedreaderWeb.Layouts do
   """
   attr(:flash, :map, required: true, doc: "the map of flash messages")
 
+  attr(:current_path, :string,
+    default: "/",
+    doc: "the current path for navigation highlighting"
+  )
+
   attr(:current_scope, :map,
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
@@ -36,58 +41,42 @@ defmodule FeedreaderWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <div class="drawer lg:drawer-open">
-      <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
-
-      <div class="drawer-content flex flex-col">
-        <header class="navbar bg-base-100 shadow-sm">
-          <div class="flex-none lg:hidden">
-            <label for="sidebar-drawer" class="btn btn-square btn-ghost">
-              <.icon name="hero-bars-3" class="w-6 h-6" />
-            </label>
-          </div>
-          <div class="flex-1">
+    <div class="min-h-screen bg-base-100">
+      <header class="navbar bg-base-200 shadow-sm border-b border-base-300">
+        <div class="max-w-4xl mx-auto w-full flex items-center justify-between">
+          <div>
             <a href="/" class="btn btn-ghost text-xl">FeedReader</a>
           </div>
-          <div class="flex-none">
-            <.theme_toggle />
-          </div>
-        </header>
-
-        <main class="p-4">
-          {render_slot(@inner_block)}
-        </main>
-      </div>
-
-      <div class="drawer-side">
-        <label for="sidebar-drawer" class="drawer-overlay"></label>
-        <aside class="bg-base-200 w-64 min-h-full">
-          <nav class="p-4">
-            <ul class="menu gap-2">
+          <nav>
+            <ul class="menu menu-horizontal px-1 gap-1">
               <li>
-                <a href="/" class={if @current_path == "/", do: "active"}>
-                  <.icon name="hero-envelope" class="w-5 h-5" /> Unread
-                </a>
+                <.link navigate="/" class={if @current_path == "/", do: "active"}>
+                  Unread
+                </.link>
               </li>
               <li>
-                <a href="/starred" class={if @current_path == "/starred", do: "active"}>
-                  <.icon name="hero-star" class="w-5 h-5" /> Starred
-                </a>
+                <.link navigate="/starred" class={if @current_path == "/starred", do: "active"}>
+                  Starred
+                </.link>
               </li>
               <li>
-                <a href="/history" class={if @current_path == "/history", do: "active"}>
-                  <.icon name="hero-clock" class="w-5 h-5" /> History
-                </a>
+                <.link navigate="/history" class={if @current_path == "/history", do: "active"}>
+                  History
+                </.link>
               </li>
               <li>
-                <a href="/feeds" class={if @current_path == "/feeds", do: "active"}>
-                  <.icon name="hero-rss" class="w-5 h-5" /> Feeds
-                </a>
+                <.link navigate="/feeds" class={if @current_path == "/feeds", do: "active"}>
+                  Feeds
+                </.link>
               </li>
             </ul>
           </nav>
-        </aside>
-      </div>
+        </div>
+      </header>
+
+      <main class="max-w-4xl mx-auto p-4">
+        {render_slot(@inner_block)}
+      </main>
     </div>
 
     <.flash_group flash={@flash} />
