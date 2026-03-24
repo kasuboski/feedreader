@@ -7,23 +7,23 @@ defmodule FeedreaderWeb.Router do
   import AshAuthentication.Plug.Helpers
 
   pipeline :browser do
-    plug :accepts, ["html"]
-    plug :fetch_session
-    plug :fetch_live_flash
-    plug :put_root_layout, html: {FeedreaderWeb.Layouts, :root}
-    plug :protect_from_forgery
-    plug :put_secure_browser_headers
-    plug :load_from_session
+    plug(:accepts, ["html"])
+    plug(:fetch_session)
+    plug(:fetch_live_flash)
+    plug(:put_root_layout, html: {FeedreaderWeb.Layouts, :root})
+    plug(:protect_from_forgery)
+    plug(:put_secure_browser_headers)
+    plug(:load_from_session)
   end
 
   pipeline :api do
-    plug :accepts, ["json"]
-    plug :load_from_bearer
-    plug :set_actor, :user
+    plug(:accepts, ["json"])
+    plug(:load_from_bearer)
+    plug(:set_actor, :user)
   end
 
   scope "/", FeedreaderWeb do
-    pipe_through :browser
+    pipe_through(:browser)
 
     ash_authentication_live_session :authenticated_routes do
       # in each liveview, add one of the following at the top of the module:
@@ -40,33 +40,42 @@ defmodule FeedreaderWeb.Router do
   end
 
   scope "/", FeedreaderWeb do
-    pipe_through :browser
+    pipe_through(:browser)
 
-    get "/", PageController, :home
-    auth_routes AuthController, Feedreader.Accounts.User, path: "/auth"
-    sign_out_route AuthController
+    live("/", EntryLive.Index, :unread)
+    live("/starred", EntryLive.Index, :starred)
+    live("/history", EntryLive.Index, :history)
+    live("/feeds", FeedLive.Index, :index)
+
+    auth_routes(AuthController, Feedreader.Accounts.User, path: "/auth")
+    sign_out_route(AuthController)
 
     # Remove these if you'd like to use your own authentication views
-    sign_in_route register_path: "/register",
-                  reset_path: "/reset",
-                  auth_routes_prefix: "/auth",
-                  on_mount: [{FeedreaderWeb.LiveUserAuth, :live_no_user}],
-                  overrides: [
-                    FeedreaderWeb.AuthOverrides,
-                    Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI
-                  ]
+    sign_in_route(
+      register_path: "/register",
+      reset_path: "/reset",
+      auth_routes_prefix: "/auth",
+      on_mount: [{FeedreaderWeb.LiveUserAuth, :live_no_user}],
+      overrides: [
+        FeedreaderWeb.AuthOverrides,
+        Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI
+      ]
+    )
 
     # Remove this if you do not want to use the reset password feature
-    reset_route auth_routes_prefix: "/auth",
-                overrides: [
-                  FeedreaderWeb.AuthOverrides,
-                  Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI
-                ]
+    reset_route(
+      auth_routes_prefix: "/auth",
+      overrides: [
+        FeedreaderWeb.AuthOverrides,
+        Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI
+      ]
+    )
 
     # Remove this if you do not use the confirmation strategy
-    confirm_route Feedreader.Accounts.User, :confirm_new_user,
+    confirm_route(Feedreader.Accounts.User, :confirm_new_user,
       auth_routes_prefix: "/auth",
       overrides: [FeedreaderWeb.AuthOverrides, Elixir.AshAuthentication.Phoenix.Overrides.DaisyUI]
+    )
 
     # Remove this if you do not use the magic link strategy.
     magic_sign_in_route(Feedreader.Accounts.User, :magic_link,
@@ -90,14 +99,14 @@ defmodule FeedreaderWeb.Router do
     import Phoenix.LiveDashboard.Router
 
     scope "/dev" do
-      pipe_through :browser
+      pipe_through(:browser)
 
-      live_dashboard "/dashboard", metrics: FeedreaderWeb.Telemetry
-      forward "/mailbox", Plug.Swoosh.MailboxPreview
+      live_dashboard("/dashboard", metrics: FeedreaderWeb.Telemetry)
+      forward("/mailbox", Plug.Swoosh.MailboxPreview)
     end
 
     scope "/" do
-      pipe_through :browser
+      pipe_through(:browser)
 
       oban_dashboard("/oban")
     end
@@ -107,9 +116,9 @@ defmodule FeedreaderWeb.Router do
     import AshAdmin.Router
 
     scope "/admin" do
-      pipe_through :browser
+      pipe_through(:browser)
 
-      ash_admin "/"
+      ash_admin("/")
     end
   end
 end

@@ -1,4 +1,5 @@
 defmodule Feedreader.Accounts.Token do
+  @moduledoc false
   use Ash.Resource,
     otp_app: :feedreader,
     domain: Feedreader.Accounts,
@@ -39,6 +40,7 @@ defmodule Feedreader.Accounts.Token do
 
     create :revoke_token do
       description "Revoke a token. Creates a revocation token corresponding to the provided token."
+
       accept [:extra_data]
       argument :token, :string, allow_nil?: false, sensitive?: true
 
@@ -47,6 +49,7 @@ defmodule Feedreader.Accounts.Token do
 
     create :revoke_jti do
       description "Revoke a token by JTI. Creates a revocation token corresponding to the provided jti."
+
       accept [:extra_data]
       argument :subject, :string, allow_nil?: false, sensitive?: true
       argument :jti, :string, allow_nil?: false, sensitive?: true

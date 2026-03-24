@@ -88,8 +88,8 @@ defmodule FeedreaderWeb do
       import FeedreaderWeb.CoreComponents
 
       # Common modules used in templates
-      alias Phoenix.LiveView.JS
       alias FeedreaderWeb.Layouts
+      alias Phoenix.LiveView.JS
 
       # Routes generation with the ~p sigil
       unquote(verified_routes())

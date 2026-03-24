@@ -12,9 +12,14 @@ config :ash_oban, pro?: false
 config :feedreader, Oban,
   engine: Oban.Engines.Lite,
   notifier: Oban.Notifiers.PG,
-  queues: [default: 10],
+  queues: [default: 10, scheduler: 5],
   repo: Feedreader.Repo,
-  plugins: [{Oban.Plugins.Cron, []}]
+  plugins: [
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"* * * * *", FeedReader.Workers.Scheduler}
+     ]}
+  ]
 
 config :ash,
   allow_forbidden_field_for_relationships_by_default?: true,
@@ -62,7 +67,7 @@ config :spark,
 config :feedreader,
   ecto_repos: [Feedreader.Repo],
   generators: [timestamp_type: :utc_datetime],
-  ash_domains: [Feedreader.Accounts]
+  ash_domains: [Feedreader.Accounts, FeedReader.Core]
 
 # Configure the endpoint
 config :feedreader, FeedreaderWeb.Endpoint,

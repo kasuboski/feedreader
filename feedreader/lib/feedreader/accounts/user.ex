@@ -1,4 +1,5 @@
 defmodule Feedreader.Accounts.User do
+  @moduledoc false
   use Ash.Resource,
     otp_app: :feedreader,
     domain: Feedreader.Accounts,

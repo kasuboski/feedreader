@@ -9,7 +9,7 @@ defmodule FeedreaderWeb.Layouts do
   # The default root.html.heex file contains the HTML
   # skeleton of your application, namely HTML headers
   # and other static content.
-  embed_templates "layouts/*"
+  embed_templates("layouts/*")
 
   @doc """
   Renders your app layout.
@@ -25,48 +25,70 @@ defmodule FeedreaderWeb.Layouts do
       </Layouts.app>
 
   """
-  attr :flash, :map, required: true, doc: "the map of flash messages"
+  attr(:flash, :map, required: true, doc: "the map of flash messages")
 
-  attr :current_scope, :map,
+  attr(:current_scope, :map,
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
+  )
 
-  slot :inner_block, required: true
+  slot(:inner_block, required: true)
 
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
-        </a>
-      </div>
-      <div class="flex-none">
-        <ul class="flex flex-column px-1 space-x-4 items-center">
-          <li>
-            <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
-          </li>
-          <li>
-            <a href="https://github.com/phoenixframework/phoenix" class="btn btn-ghost">GitHub</a>
-          </li>
-          <li>
-            <.theme_toggle />
-          </li>
-          <li>
-            <a href="https://hexdocs.pm/phoenix/overview.html" class="btn btn-primary">
-              Get Started <span aria-hidden="true">&rarr;</span>
-            </a>
-          </li>
-        </ul>
-      </div>
-    </header>
+    <div class="drawer lg:drawer-open">
+      <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-2xl space-y-4">
-        {render_slot(@inner_block)}
+      <div class="drawer-content flex flex-col">
+        <header class="navbar bg-base-100 shadow-sm">
+          <div class="flex-none lg:hidden">
+            <label for="sidebar-drawer" class="btn btn-square btn-ghost">
+              <.icon name="hero-bars-3" class="w-6 h-6" />
+            </label>
+          </div>
+          <div class="flex-1">
+            <a href="/" class="btn btn-ghost text-xl">FeedReader</a>
+          </div>
+          <div class="flex-none">
+            <.theme_toggle />
+          </div>
+        </header>
+
+        <main class="p-4">
+          {render_slot(@inner_block)}
+        </main>
       </div>
-    </main>
+
+      <div class="drawer-side">
+        <label for="sidebar-drawer" class="drawer-overlay"></label>
+        <aside class="bg-base-200 w-64 min-h-full">
+          <nav class="p-4">
+            <ul class="menu gap-2">
+              <li>
+                <a href="/" class={if @current_path == "/", do: "active"}>
+                  <.icon name="hero-envelope" class="w-5 h-5" /> Unread
+                </a>
+              </li>
+              <li>
+                <a href="/starred" class={if @current_path == "/starred", do: "active"}>
+                  <.icon name="hero-star" class="w-5 h-5" /> Starred
+                </a>
+              </li>
+              <li>
+                <a href="/history" class={if @current_path == "/history", do: "active"}>
+                  <.icon name="hero-clock" class="w-5 h-5" /> History
+                </a>
+              </li>
+              <li>
+                <a href="/feeds" class={if @current_path == "/feeds", do: "active"}>
+                  <.icon name="hero-rss" class="w-5 h-5" /> Feeds
+                </a>
+              </li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
 
     <.flash_group flash={@flash} />
     """
@@ -79,8 +101,8 @@ defmodule FeedreaderWeb.Layouts do
 
       <.flash_group flash={@flash} />
   """
-  attr :flash, :map, required: true, doc: "the map of flash messages"
-  attr :id, :string, default: "flash-group", doc: "the optional id of flash container"
+  attr(:flash, :map, required: true, doc: "the map of flash messages")
+  attr(:id, :string, default: "flash-group", doc: "the optional id of flash container")
 
   def flash_group(assigns) do
     ~H"""

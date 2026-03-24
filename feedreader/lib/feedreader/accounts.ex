@@ -1,4 +1,5 @@
 defmodule Feedreader.Accounts do
+  @moduledoc false
   use Ash.Domain, otp_app: :feedreader, extensions: [AshAdmin.Domain]
 
   admin do
