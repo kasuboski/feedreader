@@ -8,26 +8,24 @@ defmodule FeedReader.Core.Entry do
     repo Feedreader.Repo
   end
 
-  sqlite do
-    table "entries"
-    repo Feedreader.Repo
-  end
-
   actions do
     defaults [:read, :destroy]
 
     read :unread do
       filter expr(is_read == false)
-      pagination keyset?: true, default_limit: 50
+      prepare build(sort: [id: :desc])
+      pagination offset?: true, default_limit: 50
     end
 
     read :starred do
       filter expr(is_starred == true)
-      pagination keyset?: true, default_limit: 50
+      prepare build(sort: [id: :desc])
+      pagination offset?: true, default_limit: 50
     end
 
     read :history do
-      pagination keyset?: true, default_limit: 50
+      prepare build(sort: [id: :desc])
+      pagination offset?: true, default_limit: 50
     end
 
     update :toggle_read do

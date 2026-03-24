@@ -9,43 +9,45 @@ defmodule FeedreaderWeb.EntryLive.Index do
   end
 
   @impl true
-  def handle_params(params, url, socket) do
+  def handle_params(_params, url, socket) do
     action = socket.assigns.live_action
     uri = URI.parse(url)
 
-    entries = fetch_entries(action, params)
+    {entries, offset, has_more} = fetch_entries(action, limit: 50, offset: 0)
 
     {:noreply,
      socket
      |> assign(:action, action)
      |> assign(:current_path, uri.path)
      |> assign(:entries, entries)
+     |> assign(:offset, offset)
+     |> assign(:has_more, has_more)
      |> stream(:entries, entries, reset: true)}
   end
 
-  defp fetch_entries(:unread, _params) do
-    case Core.list_unread(page: [limit: 50]) do
-      {:ok, result} -> result.results
-      _ -> []
+  defp fetch_entries(:unread, page_options) do
+    case Core.list_unread(page: page_options) do
+      {:ok, result} -> {result.results, result.offset, result.more?}
+      _ -> {[], 0, false}
     end
   end
 
-  defp fetch_entries(:starred, _params) do
-    case Core.list_starred(page: [limit: 50]) do
-      {:ok, result} -> result.results
-      _ -> []
+  defp fetch_entries(:starred, page_options) do
+    case Core.list_starred(page: page_options) do
+      {:ok, result} -> {result.results, result.offset, result.more?}
+      _ -> {[], 0, false}
     end
   end
 
-  defp fetch_entries(:history, _params) do
-    case Core.list_history(page: [limit: 50]) do
-      {:ok, result} -> result.results
-      _ -> []
+  defp fetch_entries(:history, page_options) do
+    case Core.list_history(page: page_options) do
+      {:ok, result} -> {result.results, result.offset, result.more?}
+      _ -> {[], 0, false}
     end
   end
 
-  defp fetch_entries(_, _params) do
-    []
+  defp fetch_entries(_, _) do
+    {[], 0, false}
   end
 
   @impl true
@@ -58,14 +60,40 @@ defmodule FeedreaderWeb.EntryLive.Index do
 
   @impl true
   def handle_event("toggle_read", %{"id" => id}, socket) do
+    action = socket.assigns[:action]
     entry = Core.get_entry!(id)
     {:ok, updated} = Core.toggle_read(entry)
 
-    {:noreply, stream_insert(socket, :entries, updated)}
+    socket =
+      cond do
+        action == :unread && updated.is_read ->
+          stream_delete(socket, :entries, updated)
+
+        action == :unread && not updated.is_read ->
+          stream_insert(socket, :entries, updated, at: 0)
+
+        true ->
+          stream_insert(socket, :entries, updated)
+      end
+
+    {:noreply, socket}
   end
 
   @impl true
   def handle_event("load_more", _params, socket) do
-    {:noreply, socket}
+    action = socket.assigns[:action]
+    current_offset = socket.assigns[:offset] || 0
+
+    new_offset = current_offset + 50
+
+    page_options = [limit: 50, offset: new_offset]
+
+    {new_entries, offset, has_more} = fetch_entries(action, page_options)
+
+    {:noreply,
+     socket
+     |> assign(:offset, offset)
+     |> assign(:has_more, has_more)
+     |> stream(:entries, new_entries, at: -1)}
   end
 end

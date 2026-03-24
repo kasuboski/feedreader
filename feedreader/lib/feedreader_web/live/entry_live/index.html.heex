@@ -11,8 +11,21 @@
   </div>
 
   <div id="entries" phx-update="stream" class="space-y-4">
-    <div :if={!@entries || @entries == []} class="text-center py-8 text-base-content/60">
+    <div
+      :if={@entries == []}
+      id="empty-state"
+      class="hidden only:block text-center py-8 text-base-content/60"
+    >
       No entries found.
+    </div>
+    <div :if={@has_more} id="load-more-container" class="text-center py-4">
+      <button
+        id="load-more-btn"
+        phx-click="load_more"
+        class="btn btn-outline btn-sm"
+      >
+        Load More
+      </button>
     </div>
 
     <div
