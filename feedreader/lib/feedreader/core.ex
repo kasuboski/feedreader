@@ -4,21 +4,27 @@ defmodule FeedReader.Core do
   def import_opml(opml_content) do
     import SweetXml
 
-    feeds =
-      opml_content
-      |> xpath(~x"//outline[@xmlUrl]"l)
-      |> Enum.map(fn outline ->
-        title = xpath(outline, ~x"@title"s) || xpath(outline, ~x"@text"s) || "Untitled"
-        feed_url = xpath(outline, ~x"@xmlUrl"s)
-        site_url = xpath(outline, ~x"@htmlUrl"s)
-        category = xpath(outline, ~x"../../@text"s) || "Imported"
+    categories = opml_content |> xpath(~x"//body/outline"l)
 
-        %{
-          feed_url: feed_url,
-          name: title,
-          site_url: if(site_url != "", do: site_url, else: nil),
-          category: category
-        }
+    feeds =
+      Enum.flat_map(categories, fn category ->
+        category_name = xpath(category, ~x"@text"s) || "Imported"
+        category_name = if category_name != "", do: category_name, else: "Imported"
+
+        category
+        |> xpath(~x"./outline[@xmlUrl]"l)
+        |> Enum.map(fn outline ->
+          title = xpath(outline, ~x"@title"s) || xpath(outline, ~x"@text"s) || "Untitled"
+          feed_url = xpath(outline, ~x"@xmlUrl"s)
+          site_url = xpath(outline, ~x"@htmlUrl"s)
+
+          %{
+            feed_url: feed_url,
+            name: title,
+            site_url: if(site_url != "", do: site_url, else: nil),
+            category: category_name
+          }
+        end)
       end)
 
     results =

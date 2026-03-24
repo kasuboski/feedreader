@@ -9,7 +9,12 @@ defmodule FeedReader.Core.Feed do
   end
 
   actions do
-    defaults [:read, :destroy]
+    defaults [:read]
+
+    destroy :destroy do
+      primary? true
+      change cascade_destroy(:entries)
+    end
 
     create :add do
       accept [:name, :site_url, :feed_url, :category]

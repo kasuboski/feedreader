@@ -13,23 +13,6 @@
 
     <div id="entries" phx-update="stream" class="space-y-4">
       <div
-        :if={@entries == []}
-        id="empty-state"
-        class="hidden only:block text-center py-8 text-base-content/60"
-      >
-        No entries found.
-      </div>
-      <div :if={@has_more} id="load-more-container" class="text-center py-4">
-        <button
-          id="load-more-btn"
-          phx-click="load_more"
-          class="btn btn-outline btn-sm"
-        >
-          Load More
-        </button>
-      </div>
-
-      <div
         :for={{id, entry} <- (@streams && @streams.entries) || []}
         id={id}
         class="bg-base-200/80 rounded-lg border border-base-300/50 p-4 backdrop-blur-sm"
@@ -41,9 +24,16 @@
         </h2>
 
         <div class="text-sm text-base-content/60 mt-2">
-          {if entry.published_at do
-            Calendar.strftime(entry.published_at, "%Y-%m-%d %H:%M")
-          end}
+          <%= feed_name = feed_display_name(entry.feed)
+             date_str = humanize_date(entry.published_at)
+             cond do %>
+            <% feed_name && date_str -> %>
+              {feed_name} | {date_str}
+            <% feed_name -> %>
+              {feed_name}
+            <% true -> %>
+              {date_str}
+          <% end %>
         </div>
 
         <div class="flex justify-end gap-2 mt-4">
@@ -74,6 +64,25 @@
             {if entry.is_read, do: "Mark unread", else: "Mark read"}
           </button>
         </div>
+      </div>
+
+      <div :if={@has_more} id="load-more-container" class="text-center py-4">
+        <button
+          id="load-more-btn"
+          phx-click="load_more"
+          class="btn btn-outline btn-sm"
+        >
+          Load More
+        </button>
+      </div>
+
+      <div
+        :if={!@has_more && @entry_count == 0}
+        id="empty-state"
+        class="text-center py-8 text-base-content/60"
+      >
+        <p>Nothing left to read</p>
+        <p class="mt-2">Touch grass 🌿</p>
       </div>
     </div>
   </div>

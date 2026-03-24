@@ -43,6 +43,26 @@ defmodule FeedReader.Core.FeedTest do
     end
   end
 
+  describe "import_opml/1" do
+    test "imports feeds from opml file" do
+      opml_content = File.read!("#{__DIR__}/../../fixtures/feeds.opml")
+      {success_count, _errors} = Core.import_opml(opml_content)
+
+      assert success_count > 0
+    end
+
+    test "extracts categories from nested outlines" do
+      opml_content = File.read!("#{__DIR__}/../../fixtures/feeds.opml")
+      {_success_count, _errors} = Core.import_opml(opml_content)
+
+      feeds = Core.list_feeds!()
+      categories = Enum.map(feeds, & &1.category) |> Enum.uniq()
+
+      assert "Tech" in categories
+      assert "Austin" in categories
+    end
+  end
+
   describe "log_fetch_success/1" do
     test "updates last_fetched_at and clears fetch_error" do
       feed = Core.add_feed!(%{feed_url: "https://example.com/feed.xml"})

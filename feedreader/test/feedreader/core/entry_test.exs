@@ -160,6 +160,104 @@ defmodule FeedReader.Core.EntryTest do
     end
   end
 
+  describe "ordering" do
+    test "list_unread returns entries sorted by published_at ascending (oldest first)", %{
+      feed: feed
+    } do
+      now = DateTime.utc_now()
+
+      _older =
+        Core.upsert_from_feed!(%{
+          external_id: "order-1",
+          title: "Older Entry",
+          content_link: "https://example.com/older",
+          feed_id: feed.id,
+          published_at: DateTime.add(now, -3600, :second)
+        })
+
+      _newer =
+        Core.upsert_from_feed!(%{
+          external_id: "order-2",
+          title: "Newer Entry",
+          content_link: "https://example.com/newer",
+          feed_id: feed.id,
+          published_at: DateTime.add(now, -1800, :second)
+        })
+
+      _oldest =
+        Core.upsert_from_feed!(%{
+          external_id: "order-3",
+          title: "Oldest Entry",
+          content_link: "https://example.com/oldest",
+          feed_id: feed.id,
+          published_at: DateTime.add(now, -7200, :second)
+        })
+
+      {:ok, results} = Core.list_unread(page: [limit: 100])
+
+      titles = Enum.map(results.results, & &1.title)
+      assert titles == ["Oldest Entry", "Older Entry", "Newer Entry"]
+    end
+
+    test "list_starred returns entries sorted by published_at ascending", %{feed: feed} do
+      now = DateTime.utc_now()
+
+      _older =
+        Core.upsert_from_feed!(%{
+          external_id: "starred-order-1",
+          title: "Older Starred",
+          content_link: "https://example.com/older",
+          feed_id: feed.id,
+          published_at: DateTime.add(now, -3600, :second),
+          is_starred: true
+        })
+
+      _newer =
+        Core.upsert_from_feed!(%{
+          external_id: "starred-order-2",
+          title: "Newer Starred",
+          content_link: "https://example.com/newer",
+          feed_id: feed.id,
+          published_at: DateTime.add(now, -1800, :second),
+          is_starred: true
+        })
+
+      {:ok, results} = Core.list_starred()
+
+      titles = Enum.map(results.results, & &1.title)
+      assert titles == ["Older Starred", "Newer Starred"]
+    end
+
+    test "list_history returns entries sorted by published_at ascending", %{feed: feed} do
+      now = DateTime.utc_now()
+
+      _older =
+        Core.upsert_from_feed!(%{
+          external_id: "history-order-1",
+          title: "Older History",
+          content_link: "https://example.com/older",
+          feed_id: feed.id,
+          published_at: DateTime.add(now, -3600, :second),
+          is_read: true
+        })
+
+      _newer =
+        Core.upsert_from_feed!(%{
+          external_id: "history-order-2",
+          title: "Newer History",
+          content_link: "https://example.com/newer",
+          feed_id: feed.id,
+          published_at: DateTime.add(now, -1800, :second),
+          is_read: true
+        })
+
+      {:ok, results} = Core.list_history()
+
+      titles = Enum.map(results.results, & &1.title)
+      assert titles == ["Older History", "Newer History"]
+    end
+  end
+
   describe "pagination" do
     test "list_unread accepts page limit option", %{feed: feed} do
       for i <- 1..15 do

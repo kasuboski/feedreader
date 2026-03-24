@@ -9,22 +9,26 @@ defmodule FeedReader.Core.Entry do
   end
 
   actions do
-    defaults [:read, :destroy]
+    defaults [:destroy]
+
+    read :read do
+      prepare build(load: [:feed])
+    end
 
     read :unread do
       filter expr(is_read == false)
-      prepare build(sort: [id: :desc])
+      prepare build(sort: [published_at: :asc], load: [:feed])
       pagination offset?: true, default_limit: 50
     end
 
     read :starred do
       filter expr(is_starred == true)
-      prepare build(sort: [id: :desc])
+      prepare build(sort: [published_at: :asc], load: [:feed])
       pagination offset?: true, default_limit: 50
     end
 
     read :history do
-      prepare build(sort: [id: :desc])
+      prepare build(sort: [published_at: :asc], load: [:feed])
       pagination offset?: true, default_limit: 50
     end
 
@@ -67,6 +71,8 @@ defmodule FeedReader.Core.Entry do
 
   attributes do
     uuid_primary_key :id
+
+    create_timestamp :created_at
 
     attribute :external_id, :string do
       allow_nil? false

@@ -17,7 +17,7 @@ config :feedreader, Oban,
   plugins: [
     {Oban.Plugins.Cron,
      crontab: [
-       {"* * * * *", FeedReader.Workers.Scheduler}
+       {"*/3 * * * *", FeedReader.Workers.Scheduler}
      ]}
   ]
 

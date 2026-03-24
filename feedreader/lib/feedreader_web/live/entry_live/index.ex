@@ -20,6 +20,7 @@ defmodule FeedreaderWeb.EntryLive.Index do
      |> assign(:action, action)
      |> assign(:current_path, uri.path)
      |> assign(:entries, entries)
+     |> assign(:entry_count, length(entries))
      |> assign(:offset, offset)
      |> assign(:has_more, has_more)
      |> stream(:entries, entries, reset: true)}
@@ -50,12 +51,80 @@ defmodule FeedreaderWeb.EntryLive.Index do
     {[], 0, false}
   end
 
+  defp feed_display_name(nil), do: nil
+
+  defp feed_display_name(%{name: nil, feed_url: url, site_url: site_url}),
+    do: fallback_url(site_url) || root_domain(url)
+
+  defp feed_display_name(%{name: "", feed_url: url, site_url: site_url}),
+    do: fallback_url(site_url) || root_domain(url)
+
+  defp feed_display_name(%{name: name}) when name != nil and name != "", do: name
+
+  defp fallback_url(nil), do: nil
+  defp fallback_url(url), do: root_domain(url)
+
+  defp root_domain(nil), do: nil
+
+  defp root_domain(url) do
+    case URI.parse(url) do
+      %{host: host} when host != nil ->
+        parts = String.split(host, ".")
+
+        case Enum.reverse(parts) do
+          [_, second | _] -> "#{second}.#{List.first(parts)}"
+          [single] -> single
+          _ -> host
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  def humanize_date(nil), do: nil
+
+  def humanize_date(%DateTime{} = dt) do
+    now = DateTime.utc_now()
+    diff_seconds = DateTime.diff(now, dt, :second)
+
+    cond do
+      diff_seconds < 60 -> "just now"
+      diff_seconds < 3600 -> "#{div(diff_seconds, 60)}m ago"
+      diff_seconds < 86400 -> "#{div(diff_seconds, 3600)}h ago"
+      diff_seconds < 172_800 -> "yesterday"
+      diff_seconds < 604_800 -> "#{div(diff_seconds, 86400)}d ago"
+      diff_seconds < 2_592_000 -> "#{div(diff_seconds, 604_800)}w ago"
+      true -> Calendar.strftime(dt, "%b %d, %Y")
+    end
+  end
+
   @impl true
   def handle_event("toggle_star", %{"id" => id}, socket) do
+    action = socket.assigns[:action]
     entry = Core.get_entry!(id)
     {:ok, updated} = Core.toggle_starred(entry)
 
-    {:noreply, stream_insert(socket, :entries, updated)}
+    socket =
+      cond do
+        action == :starred && not updated.is_starred ->
+          new_count = socket.assigns.entry_count - 1
+
+          socket
+          |> stream_delete(:entries, updated)
+          |> assign(:entry_count, new_count)
+          |> assign(:has_more, socket.assigns.has_more && new_count >= 50)
+
+        action == :starred && updated.is_starred ->
+          socket
+          |> assign(:entry_count, socket.assigns.entry_count + 1)
+          |> stream_insert(:entries, updated, at: 0)
+
+        true ->
+          stream_insert(socket, :entries, updated)
+      end
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -67,10 +136,17 @@ defmodule FeedreaderWeb.EntryLive.Index do
     socket =
       cond do
         action == :unread && updated.is_read ->
-          stream_delete(socket, :entries, updated)
+          new_count = socket.assigns.entry_count - 1
+
+          socket
+          |> stream_delete(:entries, updated)
+          |> assign(:entry_count, new_count)
+          |> assign(:has_more, socket.assigns.has_more && new_count >= 50)
 
         action == :unread && not updated.is_read ->
-          stream_insert(socket, :entries, updated, at: 0)
+          socket
+          |> assign(:entry_count, socket.assigns.entry_count + 1)
+          |> stream_insert(:entries, updated, at: 0)
 
         true ->
           stream_insert(socket, :entries, updated)
@@ -94,6 +170,7 @@ defmodule FeedreaderWeb.EntryLive.Index do
      socket
      |> assign(:offset, offset)
      |> assign(:has_more, has_more)
+     |> assign(:entry_count, socket.assigns.entry_count + length(new_entries))
      |> stream(:entries, new_entries, at: -1)}
   end
 end
