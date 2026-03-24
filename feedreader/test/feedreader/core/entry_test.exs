@@ -228,7 +228,7 @@ defmodule FeedReader.Core.EntryTest do
       assert titles == ["Older Starred", "Newer Starred"]
     end
 
-    test "list_history returns entries sorted by published_at ascending", %{feed: feed} do
+    test "list_history returns entries sorted by published_at descending", %{feed: feed} do
       now = DateTime.utc_now()
 
       _older =
@@ -254,7 +254,7 @@ defmodule FeedReader.Core.EntryTest do
       {:ok, results} = Core.list_history()
 
       titles = Enum.map(results.results, & &1.title)
-      assert titles == ["Older History", "Newer History"]
+      assert titles == ["Newer History", "Older History"]
     end
   end
 

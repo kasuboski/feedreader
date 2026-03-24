@@ -28,7 +28,7 @@ defmodule FeedReader.Core.Entry do
     end
 
     read :history do
-      prepare build(sort: [published_at: :asc], load: [:feed])
+      prepare build(sort: [published_at: :desc], load: [:feed])
       pagination offset?: true, default_limit: 50
     end
 

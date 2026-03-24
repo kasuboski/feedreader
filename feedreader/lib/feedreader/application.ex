@@ -17,9 +17,6 @@ defmodule Feedreader.Application do
          Application.fetch_env!(:feedreader, :ash_domains),
          Application.fetch_env!(:feedreader, Oban)
        )},
-      # Start a worker by calling: Feedreader.Worker.start_link(arg)
-      # {Feedreader.Worker, arg},
-      # Start to serve requests, typically the last entry
       {DNSCluster, query: Application.get_env(:feedreader, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Feedreader.PubSub},
       FeedreaderWeb.Endpoint,

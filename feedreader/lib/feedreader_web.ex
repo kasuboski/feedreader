@@ -86,6 +86,8 @@ defmodule FeedreaderWeb do
       import Phoenix.HTML
       # Core UI components
       import FeedreaderWeb.CoreComponents
+      # Time formatting helpers
+      import FeedreaderWeb.TimeHelpers
 
       # Common modules used in templates
       alias FeedreaderWeb.Layouts

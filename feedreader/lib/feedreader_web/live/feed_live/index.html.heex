@@ -113,6 +113,9 @@
               <div class="text-xs text-gray-400 mt-1">
                 Category: {feed.category}
               </div>
+              <div class="text-xs text-gray-400 mt-1">
+                Last parsed: {humanize_date(feed.last_fetched_at) || "never"}
+              </div>
               <div :if={feed.fetch_error} class="text-xs text-error mt-1">
                 Error: {feed.fetch_error}
               </div>

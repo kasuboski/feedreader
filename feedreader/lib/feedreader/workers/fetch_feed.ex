@@ -91,8 +91,11 @@ defmodule FeedReader.Workers.FetchFeed do
 
       {:ok, parsed_entries}
     rescue
-      e in RuntimeError ->
-        {:error, "XML parse error: #{inspect(e)}"}
+      e ->
+        {:error, "XML parse error: #{Exception.message(e)}"}
+    catch
+      :exit, reason ->
+        {:error, "XML parse error: #{inspect(reason)}"}
     end
   end
 

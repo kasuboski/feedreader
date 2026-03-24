@@ -18,7 +18,8 @@ config :feedreader, Oban,
     {Oban.Plugins.Cron,
      crontab: [
        {"*/3 * * * *", FeedReader.Workers.Scheduler}
-     ]}
+     ]},
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24}
   ]
 
 config :ash,
