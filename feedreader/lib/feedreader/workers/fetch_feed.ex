@@ -1,6 +1,6 @@
 defmodule FeedReader.Workers.FetchFeed do
   @moduledoc "Oban worker that fetches and parses a single RSS/Atom feed."
-  use Oban.Worker, queue: :default
+  use Oban.Worker, queue: :default, unique: [period: 600]
 
   require Logger
 

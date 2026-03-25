@@ -24,7 +24,7 @@ defmodule FeedReader.Core.Feed do
     update :log_fetch_success do
       accept []
 
-      change set_attribute(:last_fetched_at, DateTime.utc_now())
+      change set_attribute(:last_fetched_at, &DateTime.utc_now/0)
       change set_attribute(:fetch_error, nil)
     end
 
