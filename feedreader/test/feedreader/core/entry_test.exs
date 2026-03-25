@@ -80,6 +80,24 @@ defmodule FeedReader.Core.EntryTest do
     end
   end
 
+  describe "get_entry_by_feed_and_external_id/2" do
+    test "returns entry when it exists", %{feed: feed} do
+      Core.upsert_from_feed!(%{
+        external_id: "lookup-1",
+        title: "Lookup Entry",
+        content_link: "https://example.com/lookup1",
+        feed_id: feed.id
+      })
+
+      assert {:ok, entry} = Core.get_entry_by_feed_and_external_id(feed.id, "lookup-1")
+      assert entry.title == "Lookup Entry"
+    end
+
+    test "returns error when entry does not exist", %{feed: feed} do
+      assert {:ok, nil} = Core.get_entry_by_feed_and_external_id(feed.id, "nonexistent")
+    end
+  end
+
   describe "upsert_from_feed/1" do
     test "creates a new entry", %{feed: feed} do
       attrs = %{

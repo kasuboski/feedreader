@@ -14,21 +14,37 @@ defmodule FeedReader.Workers.FetchFeed do
 
     case fetch_feed(feed.feed_url) do
       {:ok, entries} ->
-        new_entries =
-          for entry <- entries do
-            case Core.upsert_from_feed(Map.put(entry, :feed_id, feed.id)) do
-              {:ok, inserted} -> inserted
-              {:error, _} -> nil
-            end
-          end
-          |> Enum.reject(&is_nil/1)
+        {inserted, _updated} =
+          Enum.reduce(entries, {[], []}, fn entry, {ins, upd} ->
+            attrs = Map.put(entry, :feed_id, feed.id)
 
-        for entry <- new_entries do
-          Phoenix.PubSub.broadcast(Feedreader.PubSub, "entry:created", %{entry: entry})
-        end
+            existed? =
+              case Core.get_entry_by_feed_and_external_id(feed.id, entry.external_id) do
+                {:ok, _} -> true
+                _ -> false
+              end
+
+            case Core.upsert_from_feed(attrs) do
+              {:ok, record} ->
+                if existed? do
+                  {ins, [record | upd]}
+                else
+                  Phoenix.PubSub.broadcast(
+                    Feedreader.PubSub,
+                    "entry:created",
+                    %{entry: record}
+                  )
+
+                  {[record | ins], upd}
+                end
+
+              {:error, _} ->
+                {ins, upd}
+            end
+          end)
 
         Core.log_fetch_success(feed)
-        {:ok, length(new_entries)}
+        {:ok, length(inserted)}
 
       {:error, error} ->
         Core.log_fetch_error(feed, %{fetch_error: inspect(error)})
@@ -80,9 +96,24 @@ defmodule FeedReader.Workers.FetchFeed do
           comments = xpath(item, ~x"./comments/text()"s)
 
           # Try pubDate (RSS) or published (Atom)
+          # Note: "" is truthy in Elixir, so we can't use || for fallback
           published_raw =
-            xpath(item, ~x"./pubDate/text()"s) || xpath(item, ~x"./published/text()"s) ||
-              xpath(item, ~x"./updated/text()"s)
+            case xpath(item, ~x"./pubDate/text()"s) do
+              x when x != "" ->
+                x
+
+              _ ->
+                case xpath(item, ~x"./published/text()"s) do
+                  x when x != "" ->
+                    x
+
+                  _ ->
+                    case xpath(item, ~x"./updated/text()"s) do
+                      x when x != "" -> x
+                      _ -> nil
+                    end
+                end
+            end
 
           published_at = parse_date(published_raw)
 

@@ -4,6 +4,8 @@ defmodule FeedReader.Core do
 
   import SweetXml
 
+  require Ash.Query
+
   def import_opml(opml_content) do
     categories = opml_content |> xpath(~x"//body/outline"l)
 
@@ -39,6 +41,14 @@ defmodule FeedReader.Core do
     {Enum.count(results, &match?({:ok, _}, &1)), Enum.count(results, &match?({:error, _}, &1))}
   end
 
+  def get_entry_by_feed_and_external_id(feed_id, external_id) do
+    import Ash.Expr, only: [expr: 1]
+
+    FeedReader.Core.Entry
+    |> Ash.Query.filter(expr(feed_id == ^feed_id and external_id == ^external_id))
+    |> Ash.read_one(action: :read)
+  end
+
   resources do
     resource FeedReader.Core.Feed do
       define :list_feeds, action: :read
@@ -52,6 +62,7 @@ defmodule FeedReader.Core do
     resource FeedReader.Core.Entry do
       define :list_entries, action: :read
       define :get_entry, action: :read, get_by: [:id]
+
       define :list_unread, action: :unread
       define :list_starred, action: :starred
       define :list_history, action: :history
