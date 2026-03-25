@@ -36,6 +36,17 @@
           <% end %>
         </div>
 
+        <div :if={entry.comments_link} class="mt-2">
+          <a
+            href={entry.comments_link}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-sm text-primary/70 hover:text-primary transition-colors"
+          >
+            Comments
+          </a>
+        </div>
+
         <div class="flex justify-end gap-2 mt-4">
           <button
             id={"star-btn-#{entry.id}"}
