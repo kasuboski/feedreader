@@ -20,7 +20,7 @@ defmodule FeedReader.Workers.FetchFeed do
 
             existed? =
               case Core.get_entry_by_feed_and_external_id(feed.id, entry.external_id) do
-                {:ok, _} -> true
+                {:ok, entry} when not is_nil(entry) -> true
                 _ -> false
               end
 
@@ -193,7 +193,7 @@ defmodule FeedReader.Workers.FetchFeed do
           # Determine timezone offset
           tz_string = List.last(parts)
           offset = parse_tz_offset(tz_string)
-          DateTime.add(datetime, offset, :minute)
+          DateTime.add(datetime, -offset, :minute)
         else
           _ -> nil
         end

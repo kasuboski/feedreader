@@ -96,6 +96,46 @@ defmodule FeedReader.Workers.FetchFeedTest do
       assert entry.published_at.day == 24
     end
 
+    test "converts RFC822 +timezone to UTC correctly" do
+      rss = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rss version="2.0">
+        <channel>
+          <item>
+            <guid>tz-pos</guid>
+            <title>Pos TZ</title>
+            <link>https://example.com/tz</link>
+            <pubDate>15 Jan 2026 10:00:00 +0500</pubDate>
+          </item>
+        </channel>
+      </rss>
+      """
+
+      {:ok, [entry]} = FetchFeed.parse_feed(rss)
+      # +0500 means local is 5h ahead of UTC, so 10:00 +0500 = 05:00 UTC
+      assert entry.published_at.hour == 5
+    end
+
+    test "converts RFC822 -timezone to UTC correctly" do
+      rss = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <rss version="2.0">
+        <channel>
+          <item>
+            <guid>tz-neg</guid>
+            <title>Neg TZ</title>
+            <link>https://example.com/tz</link>
+            <pubDate>15 Jan 2026 10:00:00 -0500</pubDate>
+          </item>
+        </channel>
+      </rss>
+      """
+
+      {:ok, [entry]} = FetchFeed.parse_feed(rss)
+      # -0500 means local is 5h behind UTC, so 10:00 -0500 = 15:00 UTC
+      assert entry.published_at.hour == 15
+    end
+
     test "prefers <pubDate> over <published> and <updated> in RSS" do
       rss = """
       <?xml version="1.0" encoding="UTF-8"?>
@@ -117,7 +157,7 @@ defmodule FeedReader.Workers.FetchFeedTest do
     end
   end
 
-  describe "perform/1" do
+  describe "Core upsert/lookup" do
     setup do
       feed =
         Core.add_feed!(%{

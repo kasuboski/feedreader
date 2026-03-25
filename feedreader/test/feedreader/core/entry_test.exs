@@ -93,7 +93,7 @@ defmodule FeedReader.Core.EntryTest do
       assert entry.title == "Lookup Entry"
     end
 
-    test "returns error when entry does not exist", %{feed: feed} do
+    test "returns {:ok, nil} when entry does not exist", %{feed: feed} do
       assert {:ok, nil} = Core.get_entry_by_feed_and_external_id(feed.id, "nonexistent")
     end
   end
