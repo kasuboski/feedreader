@@ -1,0 +1,248 @@
+defmodule FeedReader.Workers.FetchFeed do
+  @moduledoc "Oban worker that fetches and parses a single RSS/Atom feed."
+  use Oban.Worker, queue: :default, unique: [period: 600]
+
+  require Logger
+
+  import SweetXml
+
+  alias FeedReader.Core
+
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"feed_id" => feed_id}}) do
+    feed = Core.get_feed!(feed_id)
+
+    case fetch_feed(feed.feed_url) do
+      {:ok, entries} ->
+        {inserted, _updated} =
+          Enum.reduce(entries, {[], []}, fn entry, {ins, upd} ->
+            attrs = Map.put(entry, :feed_id, feed.id)
+
+            existed? =
+              case Core.get_entry_by_feed_and_external_id(feed.id, entry.external_id) do
+                {:ok, entry} when not is_nil(entry) -> true
+                _ -> false
+              end
+
+            case Core.upsert_from_feed(attrs) do
+              {:ok, record} ->
+                if existed? do
+                  {ins, [record | upd]}
+                else
+                  Phoenix.PubSub.broadcast(
+                    Feedreader.PubSub,
+                    "entry:created",
+                    %{entry: record}
+                  )
+
+                  {[record | ins], upd}
+                end
+
+              {:error, _} ->
+                {ins, upd}
+            end
+          end)
+
+        Core.log_fetch_success(feed)
+        {:ok, length(inserted)}
+
+      {:error, error} ->
+        Core.log_fetch_error(feed, %{fetch_error: inspect(error)})
+        {:error, error}
+    end
+  end
+
+  defp fetch_feed(url) do
+    case Req.get(url, receive_timeout: 30_000) do
+      {:ok, %{status: 200, body: body}} ->
+        parse_feed(body)
+
+      {:ok, %{status: status}} ->
+        {:error, "HTTP status: #{status}"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  def parse_feed(body) do
+    try do
+      entries =
+        body
+        |> xmap(
+          items: ~x"//item"l,
+          entries: ~x"//entry"l
+        )
+
+      items = entries.items ++ entries.entries
+
+      parsed_entries =
+        for item <- items do
+          guid = xpath(item, ~x"./guid/text()"s)
+          title = xpath(item, ~x"./title/text()"s)
+          # Try Atom link attributes first, then text content
+          link =
+            case xpath(item, ~x"./link/@href"s) do
+              "" ->
+                case xpath(item, ~x"./link[@rel='alternate']/@href"s) do
+                  "" -> xpath(item, ~x"./link/text()"s)
+                  val -> val
+                end
+
+              val ->
+                val
+            end
+
+          comments = xpath(item, ~x"./comments/text()"s)
+
+          # Try pubDate (RSS) or published (Atom)
+          # Note: "" is truthy in Elixir, so we can't use || for fallback
+          published_raw =
+            case xpath(item, ~x"./pubDate/text()"s) do
+              x when x != "" ->
+                x
+
+              _ ->
+                case xpath(item, ~x"./published/text()"s) do
+                  x when x != "" ->
+                    x
+
+                  _ ->
+                    case xpath(item, ~x"./updated/text()"s) do
+                      x when x != "" -> x
+                      _ -> nil
+                    end
+                end
+            end
+
+          published_at = parse_date(published_raw)
+
+          external_id =
+            if guid != nil and guid != "" do
+              guid
+            else
+              link
+            end
+
+          %{
+            external_id: external_id || link,
+            title: title || "",
+            content_link: link || "",
+            comments_link: if(comments != "", do: comments, else: nil),
+            published_at: published_at
+          }
+        end
+
+      {:ok, parsed_entries}
+    rescue
+      e ->
+        {:error, "XML parse error: #{Exception.message(e)}"}
+    catch
+      :exit, reason ->
+        {:error, "XML parse error: #{inspect(reason)}"}
+    end
+  end
+
+  defp parse_date(nil), do: nil
+
+  defp parse_date(date_string) do
+    case DateTime.from_iso8601(date_string) do
+      {:ok, dt, _} -> dt
+      _ -> parse_rfc822(date_string)
+    end
+  end
+
+  defp parse_rfc822(""), do: nil
+
+  defp parse_rfc822(date_string) do
+    month_map = %{
+      "Jan" => 1,
+      "Feb" => 2,
+      "Mar" => 3,
+      "Apr" => 4,
+      "May" => 5,
+      "Jun" => 6,
+      "Jul" => 7,
+      "Aug" => 8,
+      "Sep" => 9,
+      "Oct" => 10,
+      "Nov" => 11,
+      "Dec" => 12
+    }
+
+    # Normalize: remove day name, handle various timezone formats
+    normalized =
+      date_string
+      # Remove day name
+      |> String.replace(~r/^[A-Za-z]{3},?\s*/, "")
+      |> String.trim()
+
+    parts = String.split(normalized, " ")
+
+    case parts do
+      [day, month, year, time | _rest] ->
+        with {d, ""} <- Integer.parse(day),
+             {y, ""} <- Integer.parse(year),
+             {h, ":" <> rest} <- Integer.parse(time),
+             {m, ":" <> s_rest} <- Integer.parse(rest),
+             {s, ""} <- Integer.parse(s_rest),
+             {:ok, month_num} <- Map.fetch(month_map, month),
+             {:ok, date} <- Date.new(y, month_num, d),
+             {:ok, time_struct} <- Time.new(h, m, s, 0),
+             {:ok, datetime} <- DateTime.new(date, time_struct) do
+          # Determine timezone offset
+          tz_string = List.last(parts)
+          offset = parse_tz_offset(tz_string)
+          DateTime.add(datetime, -offset, :minute)
+        else
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp parse_tz_offset(tz) when tz in ["GMT", "UT", "UTC", "Z"], do: 0
+
+  defp parse_tz_offset("+" <> rest) do
+    case Integer.parse(rest) do
+      {value, ""} ->
+        hours = div(value, 100)
+        minutes = rem(value, 100)
+        hours * 60 + minutes
+
+      _ ->
+        0
+    end
+  end
+
+  defp parse_tz_offset("-" <> rest) do
+    case Integer.parse(rest) do
+      {value, ""} ->
+        hours = div(value, 100)
+        minutes = rem(value, 100)
+        -(hours * 60 + minutes)
+
+      _ ->
+        0
+    end
+  end
+
+  defp parse_tz_offset(tz) when is_binary(tz) do
+    # Handle "EST", "PST" etc abbreviations
+    case tz do
+      "EST" -> -300
+      "EDT" -> -240
+      "CST" -> -360
+      "CDT" -> -300
+      "MST" -> -420
+      "MDT" -> -360
+      "PST" -> -480
+      "PDT" -> -420
+      _ -> 0
+    end
+  end
+
+  defp parse_tz_offset(_), do: 0
+end
