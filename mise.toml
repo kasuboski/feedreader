@@ -1,3 +1,46 @@
 [tools]
-erlang = 'latest'
-elixir = 'latest'
+elixir = "1.19.5"
+erlang = "28.3"
+
+[tasks.format]
+description = "Format all Elixir files"
+run = "mix format"
+
+[tasks.format_check]
+description = "Check if files are formatted (Fails if unformatted - used for CI/Hooks)"
+run = "mix format --check-formatted"
+
+[tasks.lint]
+description = "Run Credo linter"
+run = "mix credo"
+
+[tasks.security]
+description = "Run Sobelow security scanner"
+run = "mix sobelow --private"
+
+[tasks.test]
+description = "Run the standard test suite"
+run = "mix test"
+
+[tasks.typecheck]
+description = "Run Dialyzer type checker"
+run = "mix dialyzer"
+
+[tasks.coverage]
+description = "Run tests and generate HTML coverage report"
+run = "mix coveralls.html"
+
+# ==========================================
+# GIT HOOKS & PIPELINES
+# ==========================================
+
+[tasks.pre-commit]
+description = "Fast checks to run before every git commit"
+# Note: 'typecheck' is deliberately omitted here as Dialyzer is too slow 
+# to run on every commit. It should be run manually or in CI.
+depends = [
+  "format_check",
+  "lint",
+  "security",
+  "test"
+]

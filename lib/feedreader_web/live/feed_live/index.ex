@@ -3,8 +3,6 @@ defmodule FeedreaderWeb.FeedLive.Index do
 
   alias FeedReader.Core
 
-  on_mount({FeedreaderWeb.LiveUserAuth, :live_user_required})
-
   @impl true
   def mount(_params, _session, socket) do
     feeds = Core.list_feeds!()
