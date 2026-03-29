@@ -1,12 +1,12 @@
 ARG ELIXIR_VERSION=1.18.3
-ARG OTP_VERSION=27.3
-ARG ALPINE_VERSION=3.21.3
-ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-alpine-${ALPINE_VERSION}"
-ARG RUNNER_IMAGE="alpine:${ALPINE_VERSION}"
+ARG OTP_VERSION=27.0
+ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-ubuntu-noble-20260217"
+ARG RUNNER_IMAGE="ubuntu:noble-20260217"
 
 FROM ${BUILDER_IMAGE} AS builder
 
-RUN apk add --no-cache build-base git
+RUN apt-get update -y && apt-get install -y build-essential git curl \
+    && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 ENV MIX_ENV="prod"
 
@@ -36,12 +36,13 @@ RUN mix release
 
 FROM ${RUNNER_IMAGE} AS runner
 
-RUN apk add --no-cache libstdc++ openssl ncurses-libs
+RUN apt-get update -y && apt-get install -y libstdc++-12-dev openssl ca-certificates \
+    && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 WORKDIR /app
 
-RUN addgroup -g 1000 -S app && \
-    adduser -u 1000 -S app -G app
+RUN groupadd -g 1000 app && \
+    useradd -u 1000 -g app -m app
 
 RUN chown app:app /app
 
