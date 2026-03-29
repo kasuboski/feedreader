@@ -2,13 +2,15 @@ ARG ELIXIR_VERSION=1.18.3
 ARG OTP_VERSION=27.0
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-ubuntu-noble-20260217"
 ARG RUNNER_IMAGE="ubuntu:noble-20260217"
+ARG MIX_ENV=prod
 
 FROM ${BUILDER_IMAGE} AS builder
 
 RUN apt-get update -y && apt-get install -y build-essential git curl \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
-ENV MIX_ENV="prod"
+ARG MIX_ENV
+ENV MIX_ENV=${MIX_ENV}
 
 WORKDIR /app
 
@@ -48,9 +50,10 @@ RUN chown app:app /app
 
 USER app
 
+ARG MIX_ENV
 COPY --from=builder --chown=app:app /app/_build/${MIX_ENV}/rel/feedreader ./
 
-ENV MIX_ENV="prod"
+ENV MIX_ENV=${MIX_ENV}
 ENV PHX_SERVER="true"
 
 EXPOSE 4000
