@@ -41,8 +41,8 @@ RUN apt-get update -y && apt-get install -y libstdc++-12-dev openssl ca-certific
 
 WORKDIR /app
 
-RUN groupadd -g 1000 app && \
-    useradd -u 1000 -g app -m app
+RUN groupadd -g 1001 app && \
+    useradd -u 1001 -g app -m app
 
 RUN chown app:app /app
 
