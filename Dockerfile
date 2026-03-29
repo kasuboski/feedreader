@@ -6,7 +6,7 @@ ARG RUNNER_IMAGE="alpine:${ALPINE_VERSION}"
 
 FROM ${BUILDER_IMAGE} AS builder
 
-RUN apk add --no-cache git
+RUN apk add --no-cache build-base git
 
 ENV MIX_ENV="prod"
 
