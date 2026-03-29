@@ -1,6 +1,4 @@
-ARG ELIXIR_VERSION=1.18.3
-ARG OTP_VERSION=27.0
-ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-ubuntu-noble-20260217"
+ARG BUILDER_IMAGE="hexpm/elixir:1.18-erlang-27.0-ubuntu-noble-20260217"
 ARG RUNNER_IMAGE="ubuntu:noble-20260217"
 ARG MIX_ENV=prod
 
