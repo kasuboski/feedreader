@@ -54,6 +54,12 @@ COPY --from=builder --chown=app:app /app/_build/${MIX_ENV}/rel/feedreader ./
 ENV MIX_ENV=${MIX_ENV}
 ENV PHX_SERVER="true"
 ENV DATABASE_PATH="/app/data/feedreader.db"
+ENV SECRET_KEY_BASE=""
+ENV LIVE_VIEW_SIGNING_SALT=""
+ENV TOKEN_SIGNING_SECRET=""
+ENV PHX_HOST="localhost"
+ENV POOL_SIZE="10"
+ENV PORT="4000"
 
 EXPOSE 4000
 
