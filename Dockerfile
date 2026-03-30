@@ -56,4 +56,4 @@ ENV PHX_SERVER="true"
 
 EXPOSE 4000
 
-CMD ["/app/bin/server"]
+CMD ["/app/bin/feedreader", "start"]
