@@ -53,6 +53,7 @@ COPY --from=builder --chown=app:app /app/_build/${MIX_ENV}/rel/feedreader ./
 
 ENV MIX_ENV=${MIX_ENV}
 ENV PHX_SERVER="true"
+ENV DATABASE_PATH="/app/data/feedreader.db"
 
 EXPOSE 4000
 
