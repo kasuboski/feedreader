@@ -4,7 +4,7 @@ ARG MIX_ENV=prod
 
 FROM ${BUILDER_IMAGE} AS builder
 
-RUN apt-get update -y && apt-get install --no-install-recommends -y build-essential git curl \
+RUN apt-get update -y && apt-get install --no-install-recommends -y build-essential git curl ca-certificates \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ARG MIX_ENV
