@@ -200,7 +200,7 @@ defmodule FeedReader.Workers.FetchFeedTest do
         feed_id: feed.id
       })
 
-      entries = Core.list_entries!()
+      entries = Core.list_entries!().results
       assert length(entries) == 1
       assert hd(entries).title == "Updated"
     end

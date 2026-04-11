@@ -13,7 +13,9 @@ defmodule FeedReader.Core.Entry do
     defaults [:destroy]
 
     read :read do
+      primary? true
       prepare build(load: [:feed])
+      pagination keyset?: true, default_limit: 100
     end
 
     read :unread do

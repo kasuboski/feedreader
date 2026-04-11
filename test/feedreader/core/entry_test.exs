@@ -134,7 +134,7 @@ defmodule FeedReader.Core.EntryTest do
 
       assert entry2.title == "Updated Entry"
 
-      entries = Core.list_entries!()
+      entries = Core.list_entries!().results
       assert length(entries) == 1
     end
   end

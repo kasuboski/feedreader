@@ -75,7 +75,7 @@ defmodule FeedreaderWeb.FeedLive.Index do
 
       feed ->
         case Core.delete_feed(feed) do
-          {:ok, _} ->
+          :ok ->
             feeds = Core.list_feeds!()
 
             {:noreply,
@@ -83,7 +83,9 @@ defmodule FeedreaderWeb.FeedLive.Index do
              |> assign(:feeds, feeds)
              |> put_flash(:info, "Feed deleted")}
 
-          {:error, _} ->
+          {:error, error} ->
+            require Logger
+            Logger.error("Failed to delete feed: #{inspect(error)}")
             {:noreply, put_flash(socket, :error, "Unable to delete feed")}
         end
     end
