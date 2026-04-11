@@ -4,8 +4,8 @@ ARG MIX_ENV=prod
 
 FROM ${BUILDER_IMAGE} AS builder
 
-RUN apt-get update -y && apt-get install -y build-essential git curl \
-    && apt-get clean && rm -f /var/lib/apt/lists/*_*
+RUN apt-get update -y && apt-get install --no-install-recommends -y build-essential git curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ARG MIX_ENV
 ENV MIX_ENV=${MIX_ENV}
@@ -36,8 +36,8 @@ RUN mix release
 
 FROM ${RUNNER_IMAGE} AS runner
 
-RUN apt-get update -y && apt-get install -y libstdc++-12-dev openssl ca-certificates \
-    && apt-get clean && rm -f /var/lib/apt/lists/*_*
+RUN apt-get update -y && apt-get install --no-install-recommends -y libstdc++-12-dev openssl ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -45,6 +45,8 @@ RUN groupadd -g 1001 app && \
     useradd -u 1001 -g app -m app
 
 RUN chown app:app /app
+
+RUN mkdir -p /app/data && chown app:app /app/data
 
 USER app
 
@@ -57,6 +59,7 @@ ENV DATABASE_PATH="/app/data/feedreader.db"
 ENV PHX_HOST="localhost"
 ENV POOL_SIZE="10"
 ENV PORT="4000"
+ENV PHX_PUBLIC_PORT="4000"
 
 EXPOSE 4000
 
