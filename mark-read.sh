@@ -12,7 +12,7 @@ fi
 
 echo "Using container: $CONTAINER"
 
-docker exec "$CONTAINER" /app/bin/feedreader eval '
+docker exec "$CONTAINER" /app/bin/feedreader rpc '
   cutoff = DateTime.add(DateTime.utc_now(), -6, :hour) |> DateTime.to_iso8601()
   {:ok, %Exqlite.Result{num_rows: count}} = Feedreader.Repo.query(
     "UPDATE entries SET is_read = 1 WHERE published_at < ?",
