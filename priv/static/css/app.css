@@ -1,0 +1,48 @@
+/* FeedReader CSS — Tailwind v4 + DaisyUI dark mode only.
+   Ported from the Elixir app's assets/css/app.css, light theme dropped.
+   DaisyUI dark theme set as default. */
+
+@import "tailwindcss" source(none);
+@source "../../../src/feedreader/web/**/*.gleam";
+@source "../../../src/**/*.gleam";
+
+/* daisyUI Tailwind Plugin */
+@plugin "../vendor/daisyui" {
+  themes: false;
+}
+
+/* Dark theme — default and only theme */
+@plugin "../vendor/daisyui-theme" {
+  name: "dark";
+  default: true;
+  prefersdark: false;
+  color-scheme: "dark";
+  --color-base-100: oklch(18% 0.015 260);
+  --color-base-200: oklch(22% 0.018 265);
+  --color-base-300: oklch(28% 0.02 270);
+  --color-base-content: oklch(92% 0.015 260);
+  --color-primary: oklch(65% 0.22 250);
+  --color-primary-content: oklch(98% 0.02 260);
+  --color-secondary: oklch(55% 0.2 280);
+  --color-secondary-content: oklch(98% 0.015 280);
+  --color-accent: oklch(60% 0.22 300);
+  --color-accent-content: oklch(98% 0.015 300);
+  --color-neutral: oklch(25% 0.03 260);
+  --color-neutral-content: oklch(95% 0.01 260);
+  --color-info: oklch(60% 0.15 220);
+  --color-info-content: oklch(98% 0.01 220);
+  --color-success: oklch(62% 0.15 150);
+  --color-success-content: oklch(98% 0.01 150);
+  --color-warning: oklch(68% 0.15 50);
+  --color-warning-content: oklch(98% 0.01 50);
+  --color-error: oklch(58% 0.22 20);
+  --color-error-content: oklch(98% 0.01 20);
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.21875rem;
+  --size-field: 0.21875rem;
+  --border: 1.5px;
+  --depth: 1;
+  --noise: 0;
+}

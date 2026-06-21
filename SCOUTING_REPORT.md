@@ -40,7 +40,7 @@ has_many entries (cascaded delete).
 
 Unique identity on `(feed_id, external_id)` → upsert on import.
 
-**`User`** / **`Token`** — AshAuthentication magic-link auth. Single `email` field. JWT tokens stored in DB. **Effectively single-user.**
+**`User`** / **`Token`** — AshAuthentication magic-link auth. Single `email` field. JWT tokens stored in DB. **Wired into the router but not actually protecting any route** — the `ash_authentication_live_session` block is empty and no LiveView mounts `{:live_user_required}`. Auth is handled by something in front of the app (reverse proxy / network boundary). **Effectively single-user, effectively unauthenticated at the app layer.**
 
 ### 1.2 Business actions
 - Feed: add, delete (cascade), list, log_fetch_success, log_fetch_error, **import_opml** (parse OPML XML → grouped by category `text` attr, extract `xmlUrl`/`htmlUrl`/`title`).
@@ -65,10 +65,11 @@ Unique identity on `(feed_id, external_id)` → upsert on import.
 **Key implication for the rewrite**: the only interactions that genuinely need to avoid a full refresh are the read/unread and star toggles (plus load-more appending, form submits, and deletes). Everything else (navigation between Unread/Starred/History/Feeds) is fine as full page loads. This makes HTMX the natural fit (see §4).
 
 ### 1.5 UI / styling
-- Tailwind CSS v4 + **DaisyUI** with custom light/dark themes (oklch colors).
-- Theme toggle (system/light/dark) via `data-theme` attribute + localStorage.
+- Tailwind CSS v4 + **DaisyUI** with custom light/dark themes (oklch colors) defined in `assets/css/app.css`.
+- **No theme switcher in the actual UI.** A `Layouts.theme_toggle/1` component and localStorage/`data-theme` persistence JS exist in the codebase, but the toggle is only referenced by `home.html.heex`, which is rendered by `PageController.home/2` — and **`PageController.home` is not routed** (the default Phoenix welcome page was superseded by `live("/", :unread)` without cleanup). The 4 live routes (`/`, `/starred`, `/history`, `/feeds`) do not render the toggle. Users get their OS `prefers-color-scheme` via DaisyUI's `prefersdark: true` on the dark theme, with no in-app override.
 - Heroicons.
 - Layout: navbar + horizontal nav (Unread/Starred/History/Feeds), centered `max-w-4xl`.
+- **Rewrite decision: dark mode only.** The light theme, the toggle component, and the localStorage/`data-theme` persistence JS are all dropped. Simpler CSS (`@plugin "daisyui" { themes: dark; }` or `data-theme="dark"` hardcoded on `<html>`), no client-side theme JS at all.
 
 ### 1.6 Dev / ops
 - Dockerized (Dockerfile + docker-compose), GitHub Actions CI builds/pushes image.
@@ -93,8 +94,8 @@ Unique identity on `(feed_id, external_id)` → upsert on import.
 | **SweetXml (RSS/Atom parse)** | **xmlm** (pure Gleam pull parser) or **xmerl FFI** for messy real-world feeds | ⚠️ medium — see §5 |
 | **RFC822 date parsing** | **custom parser** + **birl** for ISO8601/normalization | ✅ high |
 | **PubSub (real-time)** | **drop SSE**; optional 30s HTMX poll for an unread badge | ✅ high |
-| **AshAuthentication (magic link)** | **Simplified session auth** (cookie + password/token) | ✅ high |
-| **Swoosh mailer** | drop (magic link not worth the complexity for single-user) | ✅ |
+| **AshAuthentication (magic link)** | **dropped entirely** — auth is external (reverse proxy), not enforced by the app | ✅ high |
+| **Swoosh mailer** | drop (no email needs at all) | ✅ |
 | **Tailwind v4 + DaisyUI** | **Tailwind v4 + DaisyUI** (unchanged — works with any server) | ✅ high |
 | **Heroicons** | inline SVG / heroicon set | ✅ high |
 | **Gettext (i18n)** | static strings (not meaningfully used) | ✅ |
@@ -106,7 +107,7 @@ Unique identity on `(feed_id, external_id)` → upsert on import.
 
 **Recommendation: Wisp on Mist, targeting Erlang/BEAM.**
 
-- **Wisp** is Gleam's de-facto web framework (by Louis Pilfold, Gleam's creator). It gives us routing, request bodies, form parsing, **file uploads**, sessions/cookies, and an excellent testing story (handlers are pure functions of a `Request`). This covers *every* HTTP need of the current app (forms, OPML upload, JSON API).
+- **Wisp** is Gleam's de-facto web framework (by Louis Pilfold, Gleam's creator). It gives us routing, request bodies, form parsing, **file uploads**, and an excellent testing story (handlers are pure functions of a `Request`). This covers *every* HTTP need of the current app (forms, OPML upload).
 - **Mist** is the production HTTP server (and supports **SSE / WebSockets** for the real-time new-entry notification).
 - **Target Erlang/BEAM** (not JavaScript) — this is critical because the background feed-fetcher is a major feature, and the BEAM's lightweight processes give us trivial concurrency for fetching dozens of feeds in parallel, exactly like the current app relies on.
 
@@ -174,7 +175,6 @@ feedreader/                      (single gleam app, target = erlang)
 │       ├── router.gleam         # routes: page handlers (full HTML) + HTMX fragment handlers + static assets
 │       ├── pages.gleam          # full-page render (Unread/Starred/History/Feeds) via Lustre element API
 │       ├── fragments.gleam      # HTMX partial responses (single card, feed row, toast, load-more)
-│       ├── auth.gleam           # session cookie auth (simplified)
 │       └── html/                # Lustre element builders (layout, entry_card, feed_card, nav)
 ├── priv/
 │   ├── static/
@@ -214,12 +214,12 @@ Application
 - [x] Feed health display (last_fetched_at, fetch_error)
 - [x] Real-time new-entry notification → simplified to optional 30s HTMX poll of unread count (no SSE)
 - [x] Relative date humanization
-- [x] Tailwind v4 + DaisyUI, light/dark themes, theme toggle
-- [x] Session auth (simplified from magic-link)
+- [x] Tailwind v4 + DaisyUI **dark mode only** (current app defines light/dark themes but has no theme switcher UI; rewrite drops light + the dead toggle plumbing entirely)
+- [x] **No auth** (matches the Elixir deployment — auth is external, the app is open)
 - [x] Docker build + CI
 
 **Intentionally simplified / dropped:**
-- Magic-link email auth → simple session/password auth (single-user app; email infra not justified).
+- **Auth entirely** → the app is open; auth is the deployer's responsibility (reverse proxy / network boundary). The Elixir app's AshAuthentication is wired but protects no route.
 - SSE/WebSocket real-time push → optional polling (feeds refresh on a 10-min cycle anyway).
 - SPA / client Gleam / JSON API / hydration → server-rendered HTML + HTMX (per actual requirement).
 - Gettext i18n → static strings.
@@ -305,9 +305,10 @@ Application
 
 ## 9. Open unknowns to resolve before coding
 
-1. **Auth model**: confirm single-user is acceptable (current data model has users/tokens but the app is single-user in practice). If multi-user is wanted later, design `entries`/`feeds` with `user_id` now.
-2. **Job durability**: do we need a `jobs` table (retry on crash) or is in-memory actor scheduling enough? Recommend in-memory for v1; feeds are idempotent to re-fetch.
-3. **Live badge**: include the optional 30s unread-count poll, or drop live notification entirely?
+1. **Job durability**: do we need a `jobs` table (retry on crash) or is in-memory actor scheduling enough? Recommend in-memory for v1; feeds are idempotent to re-fetch.
+2. **Live badge**: include the optional 30s unread-count poll, or drop live notification entirely?
+
+> Auth is settled: **no auth in the app** (external responsibility). The `User`/`Token` tables are dropped from the rewrite.
 
 ---
 
@@ -325,7 +326,7 @@ Built minimal server: Wisp + Mist + Lustre (SSR) + lustre_pipes + hx. **All 5 pa
 
 **Integration details to remember for the build:**
 - `hx.*` functions (`hx.post(url:)`, `hx.target(hx.Closest(".card"))`, `hx.swap(hx.OuterHTML)`) return a Lustre `attribute.Attribute(msg)`, **not** a `lustre_pipes.element.Scaffold(msg)` fn. So they pipe via `a.add(scaffold, attr)`, not bare `hx.post(...)`. A 1-line `hx_attr` adapter makes them pipe bare if preferred.
-- `wisp_mist.handler(handler, secret_key_base)` — requires a `secret_key_base: String` arg (the session/cookie signing key).
+- `wisp_mist.handler(handler, secret_key_base)` — requires a `secret_key_base: String` arg. Unused for auth (no sessions/cookies); pass any long random string to satisfy the API.
 - `mist.start` (not `start_http`) on a `mist.new(handler) |> mist.port(n)` builder.
 - `wisp.handle_head` callback receives the `Request`; `wisp.serve_static` / `wisp.log_request` callbacks receive nothing — mind the `use` arity.
 - `lustre_pipes`: childless elements (`<meta>`, `<link>`, `<script>`) must be finalized with `lp.empty()` before going into a `children([...])` list. Text-only elements use `lp.text_content(s)`. Container elements use `lp.children([...])`.
@@ -336,4 +337,4 @@ Built minimal server: Wisp + Mist + Lustre (SSR) + lustre_pipes + hx. **All 5 pa
 
 ## 10. TL;DR
 
-Rewrite as a **single Gleam BEAM application**: **Wisp + Mist** serving **server-rendered HTML** (Lustre element API, SSR-only — endorsed by Gleam's creator for exactly this use case) with **HTMX** (typed via the `hx` package) for the few interactions that must not full-refresh (read/unread + star toggles, load-more, forms, delete). **SQLite + Parrot + sqlight** for storage (mandated, proven in `yard`). **gleam_otp actors** for the cron scheduler + parallel feed fetchers. Tailwind v4 + DaisyUI theming ported verbatim. Simplify auth to sessions. No SPA, no JSON API, no SSE, no hydration — the server emits HTML fragments and HTMX swaps them. The only genuine technical risk is XML/RSS parsing robustness — mitigate with an `xmerl` FFI fallback if the pure-Gleam parser underperforms on real-world feeds.
+Rewrite as a **single Gleam BEAM application**: **Wisp + Mist** serving **server-rendered HTML** (Lustre element API, SSR-only — endorsed by Gleam's creator for exactly this use case) with **HTMX** (typed via the `hx` package) for the few interactions that must not full-refresh (read/unread + star toggles, load-more, forms, delete). **SQLite + Parrot + sqlight** for storage (mandated, proven in `yard`). **gleam_otp actors** for the cron scheduler + parallel feed fetchers. **Tailwind v4 + DaisyUI dark mode only** (no theme switcher, no light theme). **No auth** (handled externally, matching the Elixir deployment). No SPA, no JSON API, no SSE, no hydration — the server emits HTML fragments and HTMX swaps them. The only genuine technical risk was XML/RSS parsing robustness — resolved by choosing `xmerl` FFI (proven in the spike) over `xmlm` (which crashes on WordPress namespaces).

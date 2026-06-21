@@ -1,66 +1,44 @@
-ARG BUILDER_IMAGE="hexpm/elixir:1.18-erlang-27.0-ubuntu-noble-20260217"
-ARG RUNNER_IMAGE="ubuntu:noble-20260217"
-ARG MIX_ENV=prod
+# FeedReader — Gleam/Erlang feed reader
+# Multi-stage Dockerfile: build with rebar3+gleam, ship minimal runtime
 
-FROM ${BUILDER_IMAGE} AS builder
-
-RUN apt-get update -y && apt-get install --no-install-recommends -y build-essential git curl ca-certificates \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-ARG MIX_ENV
-ENV MIX_ENV=${MIX_ENV}
+FROM ghcr.io/gleam-lang/gleam:v1.16.0-erlang-alpine AS builder
 
 WORKDIR /app
 
-RUN mix local.hex --force && \
-    mix local.rebar --force
+# Install build tools needed for esqlite NIF (C compiler + SQLite dev headers)
+RUN apk add --no-cache build-base sqlite-dev
 
-COPY mix.exs mix.lock ./
-RUN mix deps.get --only $MIX_ENV
+# Copy manifest and fetch deps first (layer caching)
+COPY gleam.toml manifest.toml ./
+RUN gleam deps download
 
-RUN mkdir config
-COPY config/config.exs config/${MIX_ENV}.exs config/
-RUN mix deps.compile
+# Copy source
+COPY src/ src/
+COPY priv/ priv/
 
-COPY priv priv
-COPY lib lib
-COPY assets assets
+# Build
+RUN gleam export erlang-shipment
 
-RUN mix assets.deploy
-
-RUN mix compile
-
-COPY config/runtime.exs config/
-
-RUN mix release
-
-FROM ${RUNNER_IMAGE} AS runner
-
-RUN apt-get update -y && apt-get install --no-install-recommends -y libstdc++-12-dev openssl ca-certificates \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# ─── Runtime stage ──────────────────────────────────────────────
+# Must match the OTP version from the builder stage (gleam:v1.16.0-erlang-alpine = OTP 28)
+FROM erlang:28-alpine
 
 WORKDIR /app
 
-RUN groupadd -g 1001 app && \
-    useradd -u 1001 -g app -m app
+# Install SQLite runtime library (esqlite NIF depends on libsqlite3)
+RUN apk add --no-cache sqlite-libs
 
-RUN chown app:app /app
+COPY --from=builder /app/build/erlang-shipment ./
 
-RUN mkdir -p /app/data && chown app:app /app/data
+# Copy priv/ to the CWD so runtime code can find schema.sql and static assets
+# (gleam export erlang-shipment nests priv under feedreader/priv/, but our
+# code reads from priv/ relative to CWD).
+COPY --from=builder /app/priv ./priv
 
-USER app
+ENV DATABASE_PATH=/data/feedreader.db
 
-ARG MIX_ENV
-COPY --from=builder --chown=app:app /app/_build/${MIX_ENV}/rel/feedreader ./
+VOLUME ["/data"]
 
-ENV MIX_ENV=${MIX_ENV}
-ENV PHX_SERVER="true"
-ENV DATABASE_PATH="/app/data/feedreader.db"
-ENV PHX_HOST="localhost"
-ENV POOL_SIZE="10"
-ENV PORT="4000"
-ENV PHX_PUBLIC_PORT="4000"
+EXPOSE 3000
 
-EXPOSE 4000
-
-CMD ["/app/bin/feedreader", "start"]
+CMD ["./entrypoint.sh", "run"]

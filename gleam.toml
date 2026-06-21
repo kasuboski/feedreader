@@ -1,0 +1,41 @@
+name = "feedreader"
+version = "1.0.0"
+target = "erlang"
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+gleam_erlang = ">= 0.34.0 and < 2.0.0"
+gleam_otp = ">= 0.10.0 and < 2.0.0"
+gleam_http = ">= 4.0.0 and < 5.0.0"
+gleam_httpc = ">= 4.0.0 and < 6.0.0"
+gleam_json = ">= 3.0.0 and < 4.0.0"
+sqlight = ">= 1.0.0 and < 2.0.0"
+parrot = ">= 1.0.0 and < 2.0.0"
+wisp = ">= 2.0.0 and < 3.0.0"
+mist = ">= 6.0.0 and < 7.0.0"
+lustre = ">= 5.0.0 and < 6.0.0"
+lustre_pipes = ">= 0.3.0 and < 1.0.0"
+hx = ">= 1.0.0 and < 4.0.0"
+birl = ">= 1.0.0 and < 2.0.0"
+gluid = ">= 1.0.0 and < 2.0.0"
+envoy = ">= 1.0.0 and < 2.0.0"
+formal = ">= 2.0.0 and < 4.0.0"
+glentities = ">= 6.0.0 and < 7.0.0"
+logging = ">= 1.0.0 and < 2.0.0"
+simplifile = ">= 2.4.0 and < 3.0.0"
+
+[dev_dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
+birdie = ">= 1.0.0 and < 2.0.0"
+http_server_mock = ">= 1.0.0 and < 2.0.0"
+glinter = ">= 1.0.0 and < 3.0.0"
+http_server_mock_erlang = ">= 1.0.0 and < 2.0.0"
+glailglind = ">= 2.3.0 and < 3.0.0"
+
+[tools.tailwind]
+version = "4.1.11"
+args = [
+    "--input=priv/static/css/app.css",
+    "--output=priv/static/css/app.compiled.css",
+    "--minify"
+]

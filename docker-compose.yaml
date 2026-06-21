@@ -1,22 +1,15 @@
+version: "3.8"
+
 services:
   feedreader:
-    image: ghcr.io/kasuboski/feedreader:main
+    build: .
     ports:
-      - "4000:4000"
-    environment:
-      PHX_SERVER: "true"
-      PHX_HOST: "feeds.joshcorp.co"
-      PHX_PUBLIC_PORT: "443"
-      PHX_SCHEME: "https"
-      PORT: "4000"
-      DATABASE_PATH: "/app/data/feedreader.db"
-      POOL_SIZE: "5"
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
-      LIVE_VIEW_SIGNING_SALT: ${LIVE_VIEW_SIGNING_SALT}
-      TOKEN_SIGNING_SECRET: ${TOKEN_SIGNING_SECRET}
+      - "3000:3000"
     volumes:
-      - feedreader-data:/app/data
+      - feedreader_data:/data
+    environment:
+      - DATABASE_PATH=/data/feedreader.db
     restart: unless-stopped
 
 volumes:
-  feedreader-data:
+  feedreader_data:
