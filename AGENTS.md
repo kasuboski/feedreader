@@ -1,4 +1,4 @@
-This is a feedreader in the process of being migrated to the gleam programming language.
+A Gleam/Erlang RSS and Atom feed reader. The migration from Elixir/Phoenix is complete.
 
 ## Project guidelines
 
