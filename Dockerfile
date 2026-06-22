@@ -16,6 +16,9 @@ RUN gleam deps download
 COPY src/ src/
 COPY priv/ priv/
 
+# Build TailwindCSS (glailglind runs the tailwind CLI with config from gleam.toml)
+RUN gleam run -m tailwind/install && gleam run -m tailwind/run
+
 # Build
 RUN gleam export erlang-shipment
 
