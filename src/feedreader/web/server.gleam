@@ -27,7 +27,16 @@ const scheduler_interval_ms = 180_000
 pub fn start(db_path: String) -> Nil {
   case db.open(db_path) {
     Ok(conn) -> {
-      let _ = db.migrate(conn)
+      case db.migrate(conn) {
+        Ok(_) -> Nil
+        Error(e) -> {
+          io.println(
+            "Failed to migrate database: " <> sqlight_error_to_string(e),
+          )
+          // Fail fast — don't start workers or serve requests on a bad schema.
+          Nil
+        }
+      }
 
       // Start background workers under a supervision tree.
       // The supervisor traps exits and restarts crashed children.
