@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# gleam-sig — print the REAL signatures of stdlib/package functions from the
+# Gleam source actually installed in this project. Defeats API version-drift:
+# never guess at `list.first`, `dict.get`, `result.*`, `sqlight.*`, etc.
+#
+# Requires a project that has been built/deps downloaded (a `build/packages/` dir).
+# Falls back to a global search of any gleam_stdlib source on disk.
+#
+# Usage:
+#   gleam-sig <gleam-module-path> [name ...]     e.g. gleam-sig gleam/list first
+#   gleam-sig gleam/result                       (all pub fns in the module)
+#   gleam-sig sqlight                            (a dependency module)
+#
+# Examples:
+#   gleam-sig gleam/list first
+#   gleam-sig gleam/dict get
+#   gleam-sig gleam/option                        (see: is Option deprecated? what exists?)
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
+
+MODULE="$1"; shift
+NAMES=("$@")
+
+# Resolve the module file: src/<module-with-slashes>.gleam
+REL="${MODULE}.gleam"
+
+find_module() {
+  # 1. project deps (preferred — matches installed versions)
+  local f
+  f="$(find build/packages -path "*/src/$REL" 2>/dev/null | head -1 || true)"
+  if [[ -n "$f" ]]; then printf '%s\n' "$f"; return 0; fi
+  # 2. project src
+  if [[ -f "src/$REL" ]]; then printf 'src/%s\n' "$REL"; return 0; fi
+  # 3. global fallback: any gleam_stdlib copy on disk
+  f="$(find ~ -path "*/gleam_stdlib*/src/$REL" 2>/dev/null | head -1 || true)"
+  if [[ -n "$f" ]]; then printf '%s\n' "$f"; return 0; fi
+  # 4. any package source tree on disk
+  f="$(find ~ -path "*/build/packages/*/src/$REL" 2>/dev/null | head -1 || true)"
+  if [[ -n "$f" ]]; then printf '%s\n' "$f"; return 0; fi
+  return 1
+}
+
+FILE="$(find_module || true)"
+if [[ -z "$FILE" ]]; then
+  echo "gleam-sig: module '$MODULE' not found. Build the project first (gleam build)." >&2
+  exit 1
+fi
+
+echo "# $MODULE  ($FILE)"
+
+if [[ ${#NAMES[@]} -eq 0 ]]; then
+  # list every public symbol: types, consts, and pub fn signatures
+  grep -nE '^(pub type|pub const|pub fn|pub opaque type)' "$FILE" || echo "  (no pub symbols)"
+else
+  for NAME in "${NAMES[@]}"; do
+    echo
+    # match `pub fn name(` OR `fn name(` for internal, and the type def line
+    grep -nE "^[[:space:]]*(pub )?fn ${NAME}[[:space:]]*(\\(|<-)" "$FILE" \
+      || grep -nE "^(pub )?(opaque )?type ${NAME}\\b" "$FILE" \
+      || echo "  '$NAME' not found in $MODULE"
+  done
+fi

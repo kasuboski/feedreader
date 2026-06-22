@@ -1,46 +1,48 @@
 [tools]
-elixir = "1.19.5"
-erlang = "28.3"
+# Pinned for reproducibility: CI and local must use identical versions.
+# esqlite (a native rebar3/C NIF dep) is the reason rebar3 is required here.
+gleam = "1.16.0"
+erlang = "28.3.1"
+rebar = "3.27.0"
 
 [tasks.format]
-description = "Format all Elixir files"
-run = "mix format"
+description = "Check formatting"
+run = "gleam format --check"
 
-[tasks.format_check]
-description = "Check if files are formatted (Fails if unformatted - used for CI/Hooks)"
-run = "mix format --check-formatted"
+[tasks.check]
+description = "Type-check the project"
+run = "gleam check"
 
 [tasks.lint]
-description = "Run Credo linter"
-run = "mix credo"
-
-[tasks.security]
-description = "Run Sobelow security scanner"
-run = "mix sobelow --private"
+description = "Lint with glinter"
+run = "gleam run -m glinter"
 
 [tasks.test]
-description = "Run the standard test suite"
-run = "mix test"
+description = "Run tests"
+run = "gleam test"
 
-[tasks.typecheck]
-description = "Run Dialyzer type checker"
-run = "mix dialyzer"
+[tasks.gen]
+description = "Regenerate Parrot SQL codegen + copy schema to priv/"
+run = """
+rm -f /tmp/feedreader_gen.db
+sqlite3 /tmp/feedreader_gen.db < src/feedreader/sql/schema.sql
+gleam run -m parrot -- --sqlite /tmp/feedreader_gen.db
+rm -f /tmp/feedreader_gen.db
+cp src/feedreader/sql/schema.sql priv/schema.sql
+"""
 
-[tasks.coverage]
-description = "Run tests and generate HTML coverage report"
-run = "mix coveralls.html"
+[tasks."assets:install"]
+description = "Install TailwindCSS CLI binary (via glailglind)"
+run = "gleam run -m tailwind/install"
 
-# ==========================================
-# GIT HOOKS & PIPELINES
-# ==========================================
+[tasks."assets:build"]
+description = "Compile TailwindCSS to app.compiled.css (via glailglind)"
+run = "gleam run -m tailwind/run"
+
+[tasks.assets]
+description = "Install + build assets"
+depends = ["assets:install", "assets:build"]
 
 [tasks.pre-commit]
-description = "Fast checks to run before every git commit"
-# Note: 'typecheck' is deliberately omitted here as Dialyzer is too slow 
-# to run on every commit. It should be run manually or in CI.
-depends = [
-  "format_check",
-  "lint",
-  "security",
-  "test"
-]
+description = "Run all checks before committing"
+depends = ["format", "check", "lint", "test"]

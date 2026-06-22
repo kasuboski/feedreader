@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      # Use mise so CI installs the exact same tool versions as local
+      # (pinned in mise.toml). This provides gleam, erlang/OTP, AND rebar3.
+      # rebar3 is required because esqlite (a transitive dep via sqlight) is a
+      # native rebar3/C NIF package that must be compiled — without rebar3 it
+      # fails to build.
+      - name: Install tools with mise
+        uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
+
+      - name: Install dependencies
+        run: gleam deps download
+
+      - name: Check formatting
+        run: gleam format --check
+
+      - name: Type check
+        run: gleam check
+
+      - name: Run tests
+        run: gleam test
