@@ -1,7 +1,9 @@
 [tools]
-gleam = "latest"
-erlang = "latest"
-rebar = "latest"
+# Pinned for reproducibility: CI and local must use identical versions.
+# esqlite (a native rebar3/C NIF dep) is the reason rebar3 is required here.
+gleam = "1.16.0"
+erlang = "28.3.1"
+rebar = "3.27.0"
 
 [tasks.format]
 description = "Check formatting"
