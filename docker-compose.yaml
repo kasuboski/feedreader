@@ -1,15 +1,13 @@
-version: "3.8"
-
 services:
   feedreader:
-    build: .
+    image: ghcr.io/kasuboski/feedreader:main
     ports:
-      - "3000:3000"
-    volumes:
-      - feedreader_data:/data
+      - "4000:3000"
     environment:
-      - DATABASE_PATH=/data/feedreader.db
+      DATABASE_PATH: "/data/feedreader.db"
+    volumes:
+      - feedreader-data:/data
     restart: unless-stopped
 
 volumes:
-  feedreader_data:
+  feedreader-data:
