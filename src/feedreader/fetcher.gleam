@@ -11,6 +11,7 @@ import gleam/erlang/process
 import gleam/list
 import gleam/option.{Some}
 import gleam/otp/actor
+import gleam/result
 import sqlight
 
 // ═══════════════════════════════════════════════════════════════
@@ -42,39 +43,36 @@ fn do_process(
   fetch_fn: fn(String) -> Result(String, String),
 ) -> FetchResult {
   let now = db.now_ts()
-  case fetch_fn(feed_url) {
-    Ok(body) ->
-      case rss.parse_feed(body) {
-        Ok(entries) -> {
-          list.each(entries, fn(entry: rss.EntryAttrs) {
-            let _ =
-              db.upsert_entry(
-                conn,
-                external_id: entry.external_id,
-                title: Some(entry.title),
-                content_link: Some(entry.content_link),
-                comments_link: entry.comments_link,
-                published_at: entry.published_at,
-                feed_id: feed_id,
-              )
-          })
-          let _ = db.log_fetch_success(conn, feed_id, now)
-          Fetched(count: list.length(entries))
-        }
-        Error(parse_error) -> {
-          let _ =
-            db.log_fetch_error(
-              conn,
-              feed_id,
-              now,
-              "Parse error: " <> parse_error,
-            )
-          FetchFailed(error: "Parse error: " <> parse_error)
-        }
-      }
-    Error(fetch_error) -> {
-      let _ = db.log_fetch_error(conn, feed_id, now, fetch_error)
-      FetchFailed(error: fetch_error)
+
+  // Fetch → parse: a Result chain that flattens with `use <- result.try`, so
+  // each step is one indent level instead of three nested `case` arms.
+  let result = {
+    use body <- result.try(fetch_fn(feed_url))
+    use entries <- result.try(rss.parse_feed(body))
+
+    // Success path: upsert every entry, then log and report the count.
+    list.each(entries, fn(entry: rss.EntryAttrs) {
+      let _ =
+        db.upsert_entry(
+          conn,
+          external_id: entry.external_id,
+          title: Some(entry.title),
+          content_link: Some(entry.content_link),
+          comments_link: entry.comments_link,
+          published_at: entry.published_at,
+          feed_id: feed_id,
+        )
+    })
+    let _ = db.log_fetch_success(conn, feed_id, now)
+    Ok(Fetched(count: list.length(entries)))
+  }
+
+  // Single error handler for the whole chain, instead of one per nested arm.
+  case result {
+    Ok(result) -> result
+    Error(error) -> {
+      let _ = db.log_fetch_error(conn, feed_id, now, error)
+      FetchFailed(error:)
     }
   }
 }

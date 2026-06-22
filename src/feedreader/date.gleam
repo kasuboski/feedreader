@@ -5,46 +5,35 @@
 //// abbreviations (EST, PST, etc.) that birl may not handle.
 
 import birl
+import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
 
-/// Parse a date string in RFC822 or ISO8601 format.
+/// Parse a date string in RFC8601 or ISO8601 format.
 /// Returns normalized ISO8601 string (UTC), or None if unparseable.
 pub fn parse_date(input: Option(String)) -> Option(String) {
   case input {
-    None -> None
-    Some("") -> None
-    Some(raw) -> {
-      // Try ISO8601 first (Atom feeds)
-      case birl.parse(raw) {
-        Ok(dt) -> Some(birl.to_iso8601(dt))
-        Error(_) -> {
-          // Try HTTP/RFC822 (RSS pubDate)
-          case birl.from_http(raw) {
-            Ok(dt) -> Some(birl.to_iso8601(dt))
-            Error(_) -> {
-              // Try normalizing named TZ abbrevs to numeric offsets
-              try_normalized_tz(raw)
-            }
-          }
-        }
-      }
-    }
+    Some(raw) if raw != "" -> parse_raw(raw)
+    _ -> None
   }
 }
 
-/// Some feeds use named TZ abbrevs that birl doesn't handle.
-/// Convert them to numeric offsets and try again.
-fn try_normalized_tz(raw: String) -> Option(String) {
+/// Try each date parser in order, returning the first success.
+/// Replaces a 4-deep nested `case` pyramid with a flat list + `find_map`.
+fn parse_raw(raw: String) -> Option(String) {
+  [birl.parse, birl.from_http, parse_normalized]
+  |> list.find_map(fn(parse) { parse(raw) })
+  |> result.map(birl.to_iso8601)
+  |> option.from_result
+}
+
+/// Normalize named TZ abbrevs to numeric offsets, then retry RFC822 parsing.
+fn parse_normalized(raw: String) -> Result(birl.Time, Nil) {
   let normalized = normalize_tz(raw)
   case normalized == raw {
-    False -> {
-      case birl.from_http(normalized) {
-        Ok(dt) -> Some(birl.to_iso8601(dt))
-        Error(_) -> None
-      }
-    }
-    True -> None
+    True -> Error(Nil)
+    False -> birl.from_http(normalized)
   }
 }
 

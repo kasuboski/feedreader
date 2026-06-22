@@ -19,3 +19,4 @@ hexerldb/
 priv/static/css/app.compiled.css
 screenshots/
 *.dump
+STATUS.md

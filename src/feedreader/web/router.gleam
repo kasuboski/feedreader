@@ -219,40 +219,49 @@ fn add_feed_handler(conn: sqlight.Connection, req: wisp.Request) {
 
 fn import_opml_handler(conn: sqlight.Connection, req: wisp.Request) {
   use form <- wisp.require_form(req)
-  case get_form_file(form, "opml") {
-    Some(path) ->
-      case simplifile.read(path) {
-        Ok(content) ->
-          case opml.parse_opml(content) {
-            Ok(feed_attrs) -> {
-              let _ =
-                list.map(feed_attrs, fn(attrs) {
-                  let _ =
-                    db.insert_feed(
-                      conn,
-                      name: attrs.name,
-                      site_url: attrs.site_url,
-                      feed_url: attrs.feed_url,
-                      category: attrs.category,
-                    )
-                })
-              let count = list.length(feed_attrs)
-              feeds_page(
-                conn,
-                Some(#(
-                  view.Info,
-                  "Imported " <> int.to_string(count) <> " feeds",
-                )),
-              )
-            }
-            Error(_) ->
-              feeds_page(conn, Some(#(view.Error, "Failed to parse OPML file")))
-          }
-        Error(_) ->
-          feeds_page(conn, Some(#(view.Error, "Failed to read uploaded file")))
-      }
-    None -> feeds_page(conn, Some(#(view.Error, "No file uploaded")))
+  let result = import_opml(conn, form)
+  case result {
+    Ok(count) ->
+      feeds_page(
+        conn,
+        Some(#(view.Info, "Imported " <> int.to_string(count) <> " feeds")),
+      )
+    Error(msg) -> feeds_page(conn, Some(#(view.Error, msg)))
   }
+}
+
+/// OPML import, flat success path. Returns the number of imported feeds or an
+/// error message for the user. Uses `result.try` to avoid a pyramid of nested
+/// `case` expressions for the read → parse → insert chain.
+fn import_opml(
+  conn: sqlight.Connection,
+  form: wisp.FormData,
+) -> Result(Int, String) {
+  use path <- result.try(
+    get_form_file(form, "opml")
+    |> option.to_result("No file uploaded"),
+  )
+  use content <- result.try(
+    simplifile.read(path)
+    |> result.map_error(fn(_) { "Failed to read uploaded file" }),
+  )
+  use feed_attrs <- result.try(
+    opml.parse_opml(content)
+    |> result.map_error(fn(_) { "Failed to parse OPML file" }),
+  )
+
+  list.each(feed_attrs, fn(attrs) {
+    let _ =
+      db.insert_feed(
+        conn,
+        name: attrs.name,
+        site_url: attrs.site_url,
+        feed_url: attrs.feed_url,
+        category: attrs.category,
+      )
+  })
+
+  Ok(list.length(feed_attrs))
 }
 
 fn delete_feed_handler(conn: sqlight.Connection, id: String) {
