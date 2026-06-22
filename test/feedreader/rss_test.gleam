@@ -51,7 +51,7 @@ pub fn parse_atom_feed_test() {
   assert list.length(entries) == 1
 
   let assert Ok(first) = list.first(entries)
-  assert first.external_id == "tag:example.com,2025:1"
+  assert first.external_id == "http://example.com/1"
   assert first.title == "Entry 1"
   assert first.content_link == "http://example.com/1"
 }

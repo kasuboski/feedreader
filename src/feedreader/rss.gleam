@@ -38,7 +38,6 @@ pub fn parse_feed(body: String) -> Result(List(EntryAttrs), String) {
 /// Parse a single RSS <item> or Atom <entry> into EntryAttrs.
 fn parse_item(node: XmlNode) -> EntryAttrs {
   let guid = xml.child_text(node, "guid")
-  let id = xml.child_text(node, "id")
   let title = xml.child_text(node, "title") |> option.unwrap("")
   let link = extract_link(node)
   let comments = xml.child_text(node, "comments")
@@ -46,14 +45,13 @@ fn parse_item(node: XmlNode) -> EntryAttrs {
   let published = xml.child_text(node, "published")
   let updated = xml.child_text(node, "updated")
 
-  // external_id: guid > id > link (fallback)
+  // external_id: guid > link (matches the original Elixir parser, which
+  // checks only RSS <guid> and falls back to the link URL — NOT Atom <id>).
+  // Using <id> would produce different external_ids than the Elixir DB,
+  // causing the upsert to treat existing entries as new (and thus unread).
   let external_id = case guid {
     Some(g) -> g
-    None ->
-      case id {
-        Some(i) -> i
-        None -> link
-      }
+    None -> link
   }
 
   // date: pubDate > published > updated
