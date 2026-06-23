@@ -32,9 +32,11 @@ FROM erlang:28-slim
 
 WORKDIR /app
 
-# Install SQLite runtime library (esqlite NIF depends on libsqlite3)
+# Install runtime deps:
+# - libsqlite3-0: esqlite NIF depends on libsqlite3
+# - ca-certificates: httpc needs CA certs to verify HTTPS feeds
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libsqlite3-0 \
+    libsqlite3-0 ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/build/erlang-shipment ./
