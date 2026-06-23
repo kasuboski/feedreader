@@ -541,6 +541,21 @@ pub fn unread_count_decoder() -> decode.Decoder(UnreadCount) {
   decode.success(UnreadCount(count:))
 }
 
+pub type StarredCount {
+  StarredCount(count: Int)
+}
+
+pub fn starred_count() {
+  let sql =
+    "SELECT COUNT(*) AS count\nFROM entries\nWHERE is_starred = 1"
+  #(sql, [], starred_count_decoder())
+}
+
+pub fn starred_count_decoder() -> decode.Decoder(StarredCount) {
+  use count <- decode.field(0, decode.int)
+  decode.success(StarredCount(count:))
+}
+
 pub type CountByFeed {
   CountByFeed(count: Int)
 }

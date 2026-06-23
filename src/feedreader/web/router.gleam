@@ -154,7 +154,14 @@ fn toggle_read_handler(
     Ok(Some(entry)) -> {
       // On the unread page, marking as read removes the entry.
       case referer_view(req), entry.is_read {
-        "unread", True -> empty_fragment_response()
+        "unread", True -> {
+          // If that was the last unread entry, show the empty state.
+          let remaining = result.unwrap(db.unread_count(conn), 1)
+          case remaining {
+            0 -> fragment_response(fragments.unread_empty_state())
+            _ -> empty_fragment_response()
+          }
+        }
         _, _ -> {
           let body = fragments.entry_card_fragment(entry)
           fragment_response(body)
@@ -175,7 +182,14 @@ fn toggle_star_handler(
     Ok(Some(entry)) -> {
       // On the starred page, un-starring removes the entry.
       case referer_view(req), entry.is_starred {
-        "starred", False -> empty_fragment_response()
+        "starred", False -> {
+          // If that was the last starred entry, show the empty state.
+          let remaining = result.unwrap(db.starred_count(conn), 1)
+          case remaining {
+            0 -> fragment_response(fragments.starred_empty_state())
+            _ -> empty_fragment_response()
+          }
+        }
         _, _ -> {
           let body = fragments.entry_card_fragment(entry)
           fragment_response(body)

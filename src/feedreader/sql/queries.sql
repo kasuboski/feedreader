@@ -95,6 +95,11 @@ SELECT COUNT(*) AS count
 FROM entries
 WHERE is_read = 0;
 
+-- name: StarredCount :one
+SELECT COUNT(*) AS count
+FROM entries
+WHERE is_starred = 1;
+
 -- name: CountByFeed :one
 SELECT COUNT(*) AS count
 FROM entries

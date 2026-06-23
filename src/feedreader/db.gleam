@@ -443,6 +443,24 @@ pub fn unread_count(conn: sqlight.Connection) -> Result(Int, Nil) {
   |> result.replace_error(Nil)
 }
 
+/// Count starred entries.
+pub fn starred_count(conn: sqlight.Connection) -> Result(Int, Nil) {
+  let #(sql_str, params, decoder) = sql.starred_count()
+  sqlight.query(
+    sql_str,
+    on: conn,
+    with: params_to_values(params),
+    expecting: decoder,
+  )
+  |> result.map(fn(rows) {
+    case rows {
+      [row] -> row.count
+      _ -> 0
+    }
+  })
+  |> result.replace_error(Nil)
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Internal helpers
 // ═══════════════════════════════════════════════════════════════
