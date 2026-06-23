@@ -35,8 +35,9 @@ WORKDIR /app
 # Install runtime deps:
 # - libsqlite3-0: esqlite NIF depends on libsqlite3
 # - ca-certificates: httpc needs CA certs to verify HTTPS feeds
+# - sqlite3: CLI for operational scripts (e.g. mark-read.sh via docker exec)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libsqlite3-0 ca-certificates \
+    libsqlite3-0 ca-certificates sqlite3 \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/build/erlang-shipment ./
