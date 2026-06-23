@@ -15,7 +15,8 @@ if [ -z "$CONTAINER" ]; then
   exit 1
 fi
 
-CUTOFF=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+# 6 hours ago in UTC (works on both GNU date and macOS/BSD date)
+CUTOFF=$(date -u -d "6 hours ago" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -v-6H +"%Y-%m-%dT%H:%M:%SZ")
 
 echo "Marking entries older than $CUTOFF as read in container $CONTAINER..."
 
