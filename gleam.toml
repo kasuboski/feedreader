@@ -35,7 +35,7 @@ glailglind = ">= 2.3.0 and < 3.0.0"
 [tools.tailwind]
 version = "4.1.11"
 args = [
-    "--input=priv/static/css/app.css",
-    "--output=priv/static/css/app.compiled.css",
+    "-i", "priv/static/css/app.css",
+    "-o", "priv/static/css/app.compiled.css",
     "--minify"
 ]
