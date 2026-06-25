@@ -546,8 +546,7 @@ pub type StarredCount {
 }
 
 pub fn starred_count() {
-  let sql =
-    "SELECT COUNT(*) AS count\nFROM entries\nWHERE is_starred = 1"
+  let sql = "SELECT COUNT(*) AS count\nFROM entries\nWHERE is_starred = 1"
   #(sql, [], starred_count_decoder())
 }
 

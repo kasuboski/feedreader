@@ -54,8 +54,8 @@ pub fn starred_empty_state() -> String {
   |> lp.children([
     h.p() |> lp.text_content("Nothing starred yet"),
     h.p()
-    |> a.class("mt-2")
-    |> lp.text_content("Star entries to save them for later"),
+      |> a.class("mt-2")
+      |> lp.text_content("Star entries to save them for later"),
   ])
   |> element.to_string
 }
