@@ -36,7 +36,7 @@ WHERE id = ?;
 -- -- Entries ---------------------------------------------------
 
 -- name: GetEntry :one
-SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.feed_id,
+SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.content_opened_at, e.comments_opened_at, e.feed_id,
        f.name AS feed_name, f.site_url AS feed_site_url, f.feed_url AS feed_feed_url
 FROM entries e
 JOIN feeds f ON f.id = e.feed_id
@@ -57,7 +57,7 @@ ON CONFLICT(feed_id, external_id) DO UPDATE SET
   published_at = excluded.published_at;
 
 -- name: ListUnread :many
-SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.feed_id,
+SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.content_opened_at, e.comments_opened_at, e.feed_id,
        f.name AS feed_name, f.site_url AS feed_site_url, f.feed_url AS feed_feed_url
 FROM entries e
 JOIN feeds f ON f.id = e.feed_id
@@ -66,7 +66,7 @@ ORDER BY e.published_at IS NULL, e.published_at ASC
 LIMIT ? OFFSET ?;
 
 -- name: ListStarred :many
-SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.feed_id,
+SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.content_opened_at, e.comments_opened_at, e.feed_id,
        f.name AS feed_name, f.site_url AS feed_site_url, f.feed_url AS feed_feed_url
 FROM entries e
 JOIN feeds f ON f.id = e.feed_id
@@ -75,12 +75,24 @@ ORDER BY e.published_at IS NULL, e.published_at ASC
 LIMIT ? OFFSET ?;
 
 -- name: ListHistory :many
-SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.feed_id,
+SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.content_opened_at, e.comments_opened_at, e.feed_id,
        f.name AS feed_name, f.site_url AS feed_site_url, f.feed_url AS feed_feed_url
 FROM entries e
 JOIN feeds f ON f.id = e.feed_id
 ORDER BY e.published_at IS NULL DESC, e.published_at DESC
 LIMIT ? OFFSET ?;
+
+-- name: RecordContentOpen :one
+UPDATE entries
+SET content_opened_at = COALESCE(content_opened_at, ?)
+WHERE id = ? AND content_link IS NOT NULL AND content_link != ''
+RETURNING id;
+
+-- name: RecordCommentsOpen :one
+UPDATE entries
+SET comments_opened_at = COALESCE(comments_opened_at, ?)
+WHERE id = ? AND comments_link IS NOT NULL AND comments_link != ''
+RETURNING id;
 
 -- name: ToggleRead :exec
 UPDATE entries SET is_read = ?

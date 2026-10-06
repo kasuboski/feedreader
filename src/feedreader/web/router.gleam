@@ -40,6 +40,10 @@ pub fn handle_request(conn: sqlight.Connection, req: wisp.Request) {
       toggle_read_handler(conn, req, id)
     http.Post, ["entry", id, "toggle-star"] ->
       toggle_star_handler(conn, req, id)
+    http.Post, ["entry", id, "open", "content"] ->
+      open_entry_handler(conn, id, db.Content)
+    http.Post, ["entry", id, "open", "comments"] ->
+      open_entry_handler(conn, id, db.Comments)
 
     // ═══ Feed management ═══
     http.Post, ["feeds"] -> add_feed_handler(conn, req)
@@ -197,6 +201,31 @@ fn toggle_star_handler(
       }
     }
     _ -> wisp.not_found()
+  }
+}
+
+fn open_entry_handler(
+  conn: sqlight.Connection,
+  id: String,
+  target: db.OpenTarget,
+) -> wisp.Response {
+  case db.get_entry(conn, id) {
+    Ok(Some(entry)) -> {
+      let link = case target {
+        db.Content -> entry.content_link
+        db.Comments -> entry.comments_link
+      }
+      case link {
+        None -> wisp.not_found()
+        Some(_) ->
+          case db.record_open(conn, id, target) {
+            Ok(Nil) -> wisp.ok() |> wisp.html_body("")
+            Error(Nil) -> wisp.internal_server_error()
+          }
+      }
+    }
+    Ok(None) -> wisp.not_found()
+    Error(Nil) -> wisp.internal_server_error()
   }
 }
 
