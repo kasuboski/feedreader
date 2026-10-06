@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS entries (
   published_at TEXT,
   is_read INTEGER NOT NULL DEFAULT 0,
   is_starred INTEGER NOT NULL DEFAULT 0,
+  content_opened_at TEXT,
+  comments_opened_at TEXT,
   feed_id TEXT NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
   UNIQUE(feed_id, external_id)
 );

@@ -34,7 +34,7 @@ fn sample_entry(conn: sqlight.Connection) -> db.Entry {
       external_id: "guid-1",
       title: Some("Test Entry"),
       content_link: Some("https://example.com/1"),
-      comments_link: None,
+      comments_link: Some("https://example.com/1/comments"),
       published_at: None,
       feed_id: feed.id,
     )
@@ -108,6 +108,7 @@ pub fn dark_theme_hardcoded_test() {
 pub fn htmx_scripts_loaded_test() {
   let html = pages.unread_page([], 0, False)
   assert string.contains(html, "htmx.min.js")
+  assert string.contains(html, "entry-opens.js")
 }
 
 pub fn nav_links_present_test() {
@@ -125,6 +126,49 @@ pub fn htmx_toggle_attrs_present_test() {
     assert string.contains(html, "hx-post")
     assert string.contains(html, "toggle-read")
     assert string.contains(html, "toggle-star")
+  })
+}
+
+pub fn entry_external_links_are_tracked_directly_test() {
+  with_db(fn(conn) {
+    let entry = sample_entry(conn)
+    let html = pages.unread_page([entry], 0, False)
+    assert string.contains(html, "href=\"https://example.com/1\"")
+    assert string.contains(html, "href=\"https://example.com/1/comments\"")
+    assert string.contains(html, "target=\"_blank\"")
+    assert string.contains(html, "rel=\"noopener noreferrer\"")
+    assert string.contains(html, "data-entry-id=\"" <> entry.id <> "\"")
+    assert string.contains(html, "data-open-target=\"content\"")
+    assert string.contains(html, "data-open-target=\"comments\"")
+  })
+}
+
+pub fn entries_without_external_links_render_no_open_tracking_markup_test() {
+  with_db(fn(conn) {
+    let assert Ok(feed) =
+      db.insert_feed(
+        conn,
+        name: Some("Linkless Blog"),
+        site_url: None,
+        feed_url: "https://linkless.example/rss",
+        category: "Tech",
+      )
+    let assert Ok(Nil) =
+      db.upsert_entry(
+        conn,
+        external_id: "guid-linkless",
+        title: Some("Linkless Entry"),
+        content_link: None,
+        comments_link: None,
+        published_at: None,
+        feed_id: feed.id,
+      )
+    let assert Ok(entries) = db.list_unread(conn, limit: 10, offset: 0)
+    let assert Ok(entry) = list.first(entries)
+    let html = pages.unread_page([entry], 0, False)
+    assert string.contains(html, "Linkless Entry")
+    assert !string.contains(html, "data-entry-id=")
+    assert !string.contains(html, "data-open-target=")
   })
 }
 

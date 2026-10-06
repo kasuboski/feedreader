@@ -37,6 +37,11 @@ pub type Feed {
   )
 }
 
+pub type OpenTarget {
+  Content
+  Comments
+}
+
 pub type Entry {
   Entry(
     id: String,
@@ -48,6 +53,8 @@ pub type Entry {
     published_at: Option(String),
     is_read: Bool,
     is_starred: Bool,
+    content_opened_at: Option(String),
+    comments_opened_at: Option(String),
     feed_id: String,
     feed_name: Option(String),
   )
@@ -98,16 +105,48 @@ pub fn open(path: String) -> Result(sqlight.Connection, sqlight.Error) {
   sqlight.open(path)
 }
 
-/// Run all migrations to create the schema.
-/// Safe to call multiple times (uses IF NOT EXISTS).
+/// Run all migrations to create or upgrade the schema.
 /// Also enables foreign keys for cascade delete support.
 ///
 /// Reads the schema from `priv/schema.sql` — the single source of truth.
 /// The same file is used by Parrot for codegen (`mise run gen`).
 pub fn migrate(conn: sqlight.Connection) -> Result(Nil, sqlight.Error) {
   let _ = sqlight.exec("PRAGMA foreign_keys = ON", on: conn)
-  let assert Ok(sql) = simplifile.read("priv/schema.sql")
-  sqlight.exec(sql, on: conn)
+  let assert Ok(schema) = simplifile.read("priv/schema.sql")
+  case sqlight.exec(schema, on: conn) {
+    Error(error) -> Error(error)
+    Ok(Nil) ->
+      case ensure_column(conn, "content_opened_at") {
+        Error(error) -> Error(error)
+        Ok(Nil) -> ensure_column(conn, "comments_opened_at")
+      }
+  }
+}
+
+fn ensure_column(
+  conn: sqlight.Connection,
+  name: String,
+) -> Result(Nil, sqlight.Error) {
+  case
+    sqlight.query(
+      "SELECT COUNT(*) FROM pragma_table_info('entries') WHERE name = ?",
+      on: conn,
+      with: [sqlight.text(name)],
+      expecting: decode.at([0], decode.int),
+    )
+  {
+    Error(error) -> Error(error)
+    Ok([count, ..]) ->
+      case count {
+        0 ->
+          sqlight.exec(
+            "ALTER TABLE entries ADD COLUMN " <> name <> " TEXT",
+            on: conn,
+          )
+        _ -> Ok(Nil)
+      }
+    Ok([]) -> Ok(Nil)
+  }
 }
 
 /// Generate a new UUID (lowercase v4).
@@ -294,6 +333,39 @@ pub fn get_entry(
     }
   })
   |> result.replace_error(Nil)
+}
+
+/// Record the first successful open of an entry destination.
+/// Repeated opens preserve the original timestamp.
+pub fn record_open(
+  conn: sqlight.Connection,
+  id: String,
+  target: OpenTarget,
+) -> Result(Nil, Nil) {
+  let opened_at = now_ts()
+  let #(sql_str, params, decoder) = case target {
+    Content -> {
+      let #(query, params, decoder) =
+        sql.record_content_open(content_opened_at: opened_at, id:)
+      #(query, params, decode.map(decoder, fn(_) { Nil }))
+    }
+    Comments -> {
+      let #(query, params, decoder) =
+        sql.record_comments_open(comments_opened_at: opened_at, id:)
+      #(query, params, decode.map(decoder, fn(_) { Nil }))
+    }
+  }
+  case
+    sqlight.query(
+      sql_str,
+      on: conn,
+      with: params_to_values(params),
+      expecting: decoder,
+    )
+  {
+    Ok([_, ..]) -> Ok(Nil)
+    _ -> Error(Nil)
+  }
 }
 
 /// Upsert an entry. Uses ON CONFLICT(feed_id, external_id) to deduplicate.
@@ -512,6 +584,8 @@ fn row_to_entry_unread(row: sql.ListUnread) -> Entry {
     published_at: str_to_opt(row.published_at),
     is_read: int_to_bool(row.is_read),
     is_starred: int_to_bool(row.is_starred),
+    content_opened_at: row.content_opened_at,
+    comments_opened_at: row.comments_opened_at,
     feed_id: row.feed_id,
     feed_name: compute_feed_name(
       row.feed_name,
@@ -532,6 +606,8 @@ fn row_to_entry_starred(row: sql.ListStarred) -> Entry {
     published_at: str_to_opt(row.published_at),
     is_read: int_to_bool(row.is_read),
     is_starred: int_to_bool(row.is_starred),
+    content_opened_at: row.content_opened_at,
+    comments_opened_at: row.comments_opened_at,
     feed_id: row.feed_id,
     feed_name: compute_feed_name(
       row.feed_name,
@@ -552,6 +628,8 @@ fn row_to_entry_history(row: sql.ListHistory) -> Entry {
     published_at: str_to_opt(row.published_at),
     is_read: int_to_bool(row.is_read),
     is_starred: int_to_bool(row.is_starred),
+    content_opened_at: row.content_opened_at,
+    comments_opened_at: row.comments_opened_at,
     feed_id: row.feed_id,
     feed_name: compute_feed_name(
       row.feed_name,
@@ -572,6 +650,8 @@ fn row_to_entry(row: sql.GetEntry) -> Entry {
     published_at: str_to_opt(row.published_at),
     is_read: int_to_bool(row.is_read),
     is_starred: int_to_bool(row.is_starred),
+    content_opened_at: row.content_opened_at,
+    comments_opened_at: row.comments_opened_at,
     feed_id: row.feed_id,
     feed_name: compute_feed_name(
       row.feed_name,

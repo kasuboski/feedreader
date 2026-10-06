@@ -7,6 +7,7 @@ schedule, and serves a server-rendered HTML UI with HTMX for partial updates.
 
 - Subscribe to RSS/Atom feeds (manual add or OPML import)
 - Unread, starred, and history views
+- Ever-opened tracking for entry content and comments links (first open only)
 - Background scheduler fetches new entries every 3 minutes
 - SQLite storage via [sqlight](https://hexdocs.pm/sqlight/) + [Parrot](https://hexdocs.pm/parrot/) codegen
 - Server-rendered HTML with [Lustre](https://hexdocs.pm/lustre/) + [lustre_pipes](https://hexdocs.pm/lustre_pipes/) + [HTMX](https://htmx.org/)
@@ -23,6 +24,16 @@ gleam run             # serves on http://localhost:3000
 The database defaults to `feedreader.db` in the working directory. Override
 with the `DATABASE_PATH` environment variable.
 
+Content and comments links have independent first-open timestamps
+(`content_opened_at` and `comments_opened_at`). JavaScript records keyboard,
+regular-click, Cmd/Ctrl-click, and middle-click activations in the background;
+later opens do not change the timestamps. Opening a link does not mark the entry
+as read, and changing read status does not erase these timestamps. Existing
+entries start with no recorded opens when the database is upgraded.
+
+Tracking is best-effort if the background request fails. Context-menu “open link”
+actions are not tracked.
+
 ## Development
 
 ```sh
@@ -32,6 +43,12 @@ gleam format          # format code
 mise run pre-commit   # format + check + lint + test
 mise run gen          # regenerate Parrot SQL codegen from schema + queries
 mise run assets       # install + build TailwindCSS
+```
+
+Run the browser event-handler tests separately with Node.js:
+
+```sh
+mise exec node@24.20.0 -- node --test test/feedreader/web/entry-opens.test.js
 ```
 
 ## Deploy with Docker

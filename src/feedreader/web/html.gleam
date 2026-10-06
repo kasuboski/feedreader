@@ -61,6 +61,9 @@ pub fn layout(title: String, inner: Element(msg)) -> Element(msg) {
         h.script()
           |> a.attribute("src", "/static/js/htmx.min.js")
           |> lp.empty(),
+        h.script()
+          |> a.attribute("src", "/static/js/entry-opens.js")
+          |> lp.empty(),
       ]),
     h.body()
       |> lp.children([
@@ -120,6 +123,35 @@ fn nav_link(href: String, label: String) -> Element(msg) {
   ])
 }
 
+fn content_anchor(entry: Entry, href: String, title: String) -> Element(msg) {
+  let anchor =
+    h.a()
+    |> a.attribute("href", href)
+    |> a.attribute("target", "_blank")
+    |> a.attribute("rel", "noopener noreferrer")
+  let anchor = case entry.content_link {
+    Some(_) ->
+      anchor
+      |> a.attribute("data-entry-id", entry.id)
+      |> a.attribute("data-open-target", "content")
+    None -> anchor
+  }
+  lp.text_content(anchor, title)
+}
+
+fn comments_anchor(entry: Entry, href: String) -> Element(msg) {
+  let anchor =
+    h.a()
+    |> a.class("text-sm text-primary/70 hover:text-primary transition-colors")
+    |> a.attribute("href", href)
+    |> a.attribute("target", "_blank")
+    |> a.attribute("rel", "noopener noreferrer")
+  anchor
+  |> a.attribute("data-entry-id", entry.id)
+  |> a.attribute("data-open-target", "comments")
+  |> lp.text_content("Comments")
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Entry card (used in full pages AND HTMX fragment responses)
 // ═══════════════════════════════════════════════════════════════
@@ -164,11 +196,7 @@ pub fn entry_card(entry: Entry) -> Element(msg) {
     h.h2()
       |> a.class("text-xl font-semibold hover:text-primary transition-colors")
       |> lp.children([
-        h.a()
-        |> a.attribute("href", content_link)
-        |> a.attribute("target", "_blank")
-        |> a.attribute("rel", "noopener noreferrer")
-        |> lp.text_content(title),
+        content_anchor(entry, content_link, title),
       ]),
     // Metadata: "Feed Name | Date" (conditional)
     case metadata {
@@ -185,14 +213,7 @@ pub fn entry_card(entry: Entry) -> Element(msg) {
         h.div()
         |> a.class("mt-2")
         |> lp.children([
-          h.a()
-          |> a.class(
-            "text-sm text-primary/70 hover:text-primary transition-colors",
-          )
-          |> a.attribute("href", url)
-          |> a.attribute("target", "_blank")
-          |> a.attribute("rel", "noopener noreferrer")
-          |> lp.text_content("Comments"),
+          comments_anchor(entry, url),
         ])
     },
     // Action buttons (HTMX — no page refresh)

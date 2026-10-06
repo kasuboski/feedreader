@@ -188,6 +188,8 @@ pub type GetEntry {
     published_at: Option(String),
     is_read: Int,
     is_starred: Int,
+    content_opened_at: Option(String),
+    comments_opened_at: Option(String),
     feed_id: String,
     feed_name: Option(String),
     feed_site_url: Option(String),
@@ -198,7 +200,7 @@ pub type GetEntry {
 pub fn get_entry(id id: String) {
   let sql =
     "
-SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.feed_id,
+SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.content_opened_at, e.comments_opened_at, e.feed_id,
        f.name AS feed_name, f.site_url AS feed_site_url, f.feed_url AS feed_feed_url
 FROM entries e
 JOIN feeds f ON f.id = e.feed_id
@@ -216,10 +218,12 @@ pub fn get_entry_decoder() -> decode.Decoder(GetEntry) {
   use published_at <- decode.field(6, decode.optional(decode.string))
   use is_read <- decode.field(7, decode.int)
   use is_starred <- decode.field(8, decode.int)
-  use feed_id <- decode.field(9, decode.string)
-  use feed_name <- decode.field(10, decode.optional(decode.string))
-  use feed_site_url <- decode.field(11, decode.optional(decode.string))
-  use feed_feed_url <- decode.field(12, decode.string)
+  use content_opened_at <- decode.field(9, decode.optional(decode.string))
+  use comments_opened_at <- decode.field(10, decode.optional(decode.string))
+  use feed_id <- decode.field(11, decode.string)
+  use feed_name <- decode.field(12, decode.optional(decode.string))
+  use feed_site_url <- decode.field(13, decode.optional(decode.string))
+  use feed_feed_url <- decode.field(14, decode.string)
   decode.success(GetEntry(
     id:,
     created_at:,
@@ -230,6 +234,8 @@ pub fn get_entry_decoder() -> decode.Decoder(GetEntry) {
     published_at:,
     is_read:,
     is_starred:,
+    content_opened_at:,
+    comments_opened_at:,
     feed_id:,
     feed_name:,
     feed_site_url:,
@@ -339,6 +345,8 @@ pub type ListUnread {
     published_at: Option(String),
     is_read: Int,
     is_starred: Int,
+    content_opened_at: Option(String),
+    comments_opened_at: Option(String),
     feed_id: String,
     feed_name: Option(String),
     feed_site_url: Option(String),
@@ -348,7 +356,7 @@ pub type ListUnread {
 
 pub fn list_unread(limit limit: Int, offset offset: Int) {
   let sql =
-    "SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.feed_id,
+    "SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.content_opened_at, e.comments_opened_at, e.feed_id,
        f.name AS feed_name, f.site_url AS feed_site_url, f.feed_url AS feed_feed_url
 FROM entries e
 JOIN feeds f ON f.id = e.feed_id
@@ -368,10 +376,12 @@ pub fn list_unread_decoder() -> decode.Decoder(ListUnread) {
   use published_at <- decode.field(6, decode.optional(decode.string))
   use is_read <- decode.field(7, decode.int)
   use is_starred <- decode.field(8, decode.int)
-  use feed_id <- decode.field(9, decode.string)
-  use feed_name <- decode.field(10, decode.optional(decode.string))
-  use feed_site_url <- decode.field(11, decode.optional(decode.string))
-  use feed_feed_url <- decode.field(12, decode.string)
+  use content_opened_at <- decode.field(9, decode.optional(decode.string))
+  use comments_opened_at <- decode.field(10, decode.optional(decode.string))
+  use feed_id <- decode.field(11, decode.string)
+  use feed_name <- decode.field(12, decode.optional(decode.string))
+  use feed_site_url <- decode.field(13, decode.optional(decode.string))
+  use feed_feed_url <- decode.field(14, decode.string)
   decode.success(ListUnread(
     id:,
     created_at:,
@@ -382,6 +392,8 @@ pub fn list_unread_decoder() -> decode.Decoder(ListUnread) {
     published_at:,
     is_read:,
     is_starred:,
+    content_opened_at:,
+    comments_opened_at:,
     feed_id:,
     feed_name:,
     feed_site_url:,
@@ -400,6 +412,8 @@ pub type ListStarred {
     published_at: Option(String),
     is_read: Int,
     is_starred: Int,
+    content_opened_at: Option(String),
+    comments_opened_at: Option(String),
     feed_id: String,
     feed_name: Option(String),
     feed_site_url: Option(String),
@@ -409,7 +423,7 @@ pub type ListStarred {
 
 pub fn list_starred(limit limit: Int, offset offset: Int) {
   let sql =
-    "SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.feed_id,
+    "SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.content_opened_at, e.comments_opened_at, e.feed_id,
        f.name AS feed_name, f.site_url AS feed_site_url, f.feed_url AS feed_feed_url
 FROM entries e
 JOIN feeds f ON f.id = e.feed_id
@@ -429,10 +443,12 @@ pub fn list_starred_decoder() -> decode.Decoder(ListStarred) {
   use published_at <- decode.field(6, decode.optional(decode.string))
   use is_read <- decode.field(7, decode.int)
   use is_starred <- decode.field(8, decode.int)
-  use feed_id <- decode.field(9, decode.string)
-  use feed_name <- decode.field(10, decode.optional(decode.string))
-  use feed_site_url <- decode.field(11, decode.optional(decode.string))
-  use feed_feed_url <- decode.field(12, decode.string)
+  use content_opened_at <- decode.field(9, decode.optional(decode.string))
+  use comments_opened_at <- decode.field(10, decode.optional(decode.string))
+  use feed_id <- decode.field(11, decode.string)
+  use feed_name <- decode.field(12, decode.optional(decode.string))
+  use feed_site_url <- decode.field(13, decode.optional(decode.string))
+  use feed_feed_url <- decode.field(14, decode.string)
   decode.success(ListStarred(
     id:,
     created_at:,
@@ -443,6 +459,8 @@ pub fn list_starred_decoder() -> decode.Decoder(ListStarred) {
     published_at:,
     is_read:,
     is_starred:,
+    content_opened_at:,
+    comments_opened_at:,
     feed_id:,
     feed_name:,
     feed_site_url:,
@@ -461,6 +479,8 @@ pub type ListHistory {
     published_at: Option(String),
     is_read: Int,
     is_starred: Int,
+    content_opened_at: Option(String),
+    comments_opened_at: Option(String),
     feed_id: String,
     feed_name: Option(String),
     feed_site_url: Option(String),
@@ -470,7 +490,7 @@ pub type ListHistory {
 
 pub fn list_history(limit limit: Int, offset offset: Int) {
   let sql =
-    "SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.feed_id,
+    "SELECT e.id, e.created_at, e.external_id, e.title, e.content_link, e.comments_link, e.published_at, e.is_read, e.is_starred, e.content_opened_at, e.comments_opened_at, e.feed_id,
        f.name AS feed_name, f.site_url AS feed_site_url, f.feed_url AS feed_feed_url
 FROM entries e
 JOIN feeds f ON f.id = e.feed_id
@@ -489,10 +509,12 @@ pub fn list_history_decoder() -> decode.Decoder(ListHistory) {
   use published_at <- decode.field(6, decode.optional(decode.string))
   use is_read <- decode.field(7, decode.int)
   use is_starred <- decode.field(8, decode.int)
-  use feed_id <- decode.field(9, decode.string)
-  use feed_name <- decode.field(10, decode.optional(decode.string))
-  use feed_site_url <- decode.field(11, decode.optional(decode.string))
-  use feed_feed_url <- decode.field(12, decode.string)
+  use content_opened_at <- decode.field(9, decode.optional(decode.string))
+  use comments_opened_at <- decode.field(10, decode.optional(decode.string))
+  use feed_id <- decode.field(11, decode.string)
+  use feed_name <- decode.field(12, decode.optional(decode.string))
+  use feed_site_url <- decode.field(13, decode.optional(decode.string))
+  use feed_feed_url <- decode.field(14, decode.string)
   decode.success(ListHistory(
     id:,
     created_at:,
@@ -503,11 +525,63 @@ pub fn list_history_decoder() -> decode.Decoder(ListHistory) {
     published_at:,
     is_read:,
     is_starred:,
+    content_opened_at:,
+    comments_opened_at:,
     feed_id:,
     feed_name:,
     feed_site_url:,
     feed_feed_url:,
   ))
+}
+
+pub type RecordContentOpen {
+  RecordContentOpen(id: String)
+}
+
+pub fn record_content_open(
+  content_opened_at content_opened_at: String,
+  id id: String,
+) {
+  let sql =
+    "UPDATE entries
+SET content_opened_at = COALESCE(content_opened_at, ?)
+WHERE id = ? AND content_link IS NOT NULL AND content_link != ''
+RETURNING id"
+  #(
+    sql,
+    [dev.ParamString(content_opened_at), dev.ParamString(id)],
+    record_content_open_decoder(),
+  )
+}
+
+pub fn record_content_open_decoder() -> decode.Decoder(RecordContentOpen) {
+  use id <- decode.field(0, decode.string)
+  decode.success(RecordContentOpen(id:))
+}
+
+pub type RecordCommentsOpen {
+  RecordCommentsOpen(id: String)
+}
+
+pub fn record_comments_open(
+  comments_opened_at comments_opened_at: String,
+  id id: String,
+) {
+  let sql =
+    "UPDATE entries
+SET comments_opened_at = COALESCE(comments_opened_at, ?)
+WHERE id = ? AND comments_link IS NOT NULL AND comments_link != ''
+RETURNING id"
+  #(
+    sql,
+    [dev.ParamString(comments_opened_at), dev.ParamString(id)],
+    record_comments_open_decoder(),
+  )
+}
+
+pub fn record_comments_open_decoder() -> decode.Decoder(RecordCommentsOpen) {
+  use id <- decode.field(0, decode.string)
+  decode.success(RecordCommentsOpen(id:))
 }
 
 pub fn toggle_read(is_read is_read: Int, id id: String) {
@@ -546,7 +620,10 @@ pub type StarredCount {
 }
 
 pub fn starred_count() {
-  let sql = "SELECT COUNT(*) AS count\nFROM entries\nWHERE is_starred = 1"
+  let sql =
+    "SELECT COUNT(*) AS count
+FROM entries
+WHERE is_starred = 1"
   #(sql, [], starred_count_decoder())
 }
 
